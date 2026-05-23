@@ -43,16 +43,23 @@ def bresenham(r0: int, c0: int, r1: int, c1: int):
             c += sc
 
 
-def update_grid_from_scan(grid: OccupancyGrid, cells: np.ndarray):
+def update_grid_from_scan(
+    grid: OccupancyGrid,
+    cells: np.ndarray,
+    ego_row: int | None = None,
+    ego_col: int | None = None,
+):
     """
     Apply the inverse sensor model for an entire preprocessed scan.
 
     Args:
-        grid:  OccupancyGrid to update in-place
-        cells: (M, 2) int array of (row, col) LiDAR hit locations
+        grid:    OccupancyGrid to update in-place
+        cells:   (M, 2) int array of (row, col) LiDAR hit locations
+        ego_row: Override ego origin row (used in world-frame mode)
+        ego_col: Override ego origin col (used in world-frame mode)
     """
-    ego_r = grid.ego_row
-    ego_c = grid.ego_col
+    ego_r = ego_row if ego_row is not None else grid.ego_row
+    ego_c = ego_col if ego_col is not None else grid.ego_col
     grid_size = grid.grid_size
 
     free_rows = []

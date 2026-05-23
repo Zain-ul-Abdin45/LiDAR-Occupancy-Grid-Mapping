@@ -5,7 +5,7 @@ Visualizes the occupancy grid as a Bird's Eye View heatmap.
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
+from scipy.ndimage import gaussian_filter
 from .occupancy_grid import OccupancyGrid
 
 
@@ -14,20 +14,31 @@ def plot_grid(
     title: str = "Occupancy Grid",
     save_path: str | None = None,
     show: bool = True,
+    smooth_sigma: float = 0.0,
+    show_ego: bool = True,
 ):
     """
     Plot the occupancy probability grid as a grayscale BEV image.
 
     Dark = occupied (P → 1), Light = free (P → 0), Mid-grey = unknown (P = 0.5).
-    A red cross marks the ego vehicle position.
 
     Args:
-        grid:      OccupancyGrid to visualize
-        title:     Figure title
-        save_path: If provided, save PNG to this path
-        show:      If True, call plt.show()
+        grid:         OccupancyGrid to visualize
+        title:        Figure title
+        save_path:    If provided, save PNG to this path
+        show:         If True, call plt.show()
+        smooth_sigma: Gaussian blur sigma in cells (0 = off). Try 0.8 to soften
+                      LiDAR beam-ring gaps without losing obstacle edges.
+        show_ego:     Draw a red cross at the grid-centre ego position.
     """
     prob = grid.get_probability()
+
+    if smooth_sigma > 0.0:
+        prob = gaussian_filter(prob, sigma=smooth_sigma)
+        prob = np.clip(prob, 0.0, 1.0)
+
+    half = grid.grid_size * grid.cell_size / 2  # metres to edge of grid
+    extent = [-half, half, -half, half]
 
     fig, ax = plt.subplots(figsize=(7, 7))
 
@@ -38,19 +49,19 @@ def plot_grid(
         vmin=0.0,
         vmax=1.0,
         origin="upper",
-        extent=[-20, 20, -20, 20],  # x and y in metres
+        extent=extent,
     )
 
-    # Ego vehicle marker
-    ax.plot(0, 0, "r+", markersize=12, markeredgewidth=2, label="Ego vehicle")
+    if show_ego:
+        ax.plot(0, 0, "r+", markersize=12, markeredgewidth=2, label="Ego vehicle")
 
-    # Axes labels in world coordinates
-    ax.set_xlabel("y (left) →  metres")
-    ax.set_ylabel("x (forward) →  metres")
+    ax.set_xlabel("x (forward) →  metres")
+    ax.set_ylabel("y (left) →  metres")
     ax.set_title(title)
 
     plt.colorbar(im, ax=ax, label="P(occupied)", fraction=0.046, pad=0.04)
-    ax.legend(loc="upper right", fontsize=9)
+    if show_ego:
+        ax.legend(loc="upper right", fontsize=9)
 
     plt.tight_layout()
 
