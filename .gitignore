@@ -1,0 +1,15 @@
+# Large datasets (IMPORTANT)
+v1.0-mini/
+*.bin
+*.pcd
+*.ply
+*.bag
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
