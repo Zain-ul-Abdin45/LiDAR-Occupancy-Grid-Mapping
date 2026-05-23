@@ -29,6 +29,12 @@ We convert raw LiDAR point clouds from the nuScenes-mini dataset into a 2D occup
 
 ## Dataset — nuScenes-mini
 
+Download the NUScenes mini dataset from:
+https://www.nuscenes.org/download
+
+Place it in:
+v1.0-mini/
+
 Located at `v1.0-mini/`. This is the official [nuScenes](https://www.nuscenes.org/) mini split.
 
 ```
