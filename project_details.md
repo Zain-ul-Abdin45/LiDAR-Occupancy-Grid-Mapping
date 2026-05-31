@@ -14,6 +14,10 @@
 | Interim presentation submission | 2026-05-24 |
 | Interim presentation (live) | 2026-06-01 |
 | Tier 2 algorithm target | 2026-06-02 – 2026-06-15 |
+| Evaluation + ablation target | 2026-06-16 – 2026-06-29 |
+| Results freeze (hard) | 2026-07-06 |
+| Paper writing | 2026-07-07 – 2026-07-13 |
+| Classes end / submission deadline | 2026-07-13 |
 
 ---
 
@@ -272,6 +276,39 @@ $PYTHON main.py --data-root v1.0-mini --scene scene-0061 --single-scan --scan-in
 | `output/scene-0061_scan00.png` | Single scan, σ=0.8 smooth | **Use for presentation** — clean, road structure visible, ring gaps smoothed |
 | `output/scene-0061_world_frame.png` | World-frame, all 39 scans, σ=0.8 | Correct algorithm, complex urban result — not ideal for visual demo |
 | `output/scene-0061_bayesian.png` | Old ego-frame (pre-fix) | Archived — shows smearing artifact |
+
+---
+
+## 12. Extension Options — Pending TA Decision (as of 2026-05-25)
+
+Three options scoped after interim feedback. TA has not responded yet — no direction committed.
+
+### Option A — Ablation Study: What makes PC-SBL work? (Recommended)
+Run three configurations on the same scene and compare NMSE + IoBB:
+1. Tier 1: Classical Bayesian log-odds (already done)
+2. PC-SBL, β=0: EM with Gamma prior but no neighbor coupling (sparsity only, cells still independent)
+3. PC-SBL, β=1: Full method as in Önen 2024 (sparsity + spatial correlation)
+4. *(Stretch)* β sweep over {0.0, 0.5, 1.0, 2.0} → plot NMSE vs β
+
+**Why:** Önen 2024 fixes β=1 throughout and never isolates β's contribution. This is a genuine gap.
+**Cost:** Zero architecture changes. Same pipeline, one parameter varied. ~1 extra day after EM works.
+
+### Option B — Grid Resolution Sensitivity Study
+Run the same scene at three resolutions and measure how PC-SBL accuracy changes:
+- 0.25 m (fine — objects span more cells, more neighbors to correlate)
+- 0.5 m (paper's resolution — baseline)
+- 1.0 m (coarse — objects span fewer cells, correlation less meaningful)
+
+**Why:** Önen 2024 uses 0.5 m exclusively. Resolution sensitivity is uncharacterized.
+**Caveat:** IoBB evaluation changes at different resolutions (bounding box projections shift). Requires care.
+
+### Option C — Multi-Frame Temporal Accumulation
+Compare two PC-SBL input modes:
+- Single-frame: process each LiDAR scan independently
+- Accumulated: aggregate 3–5 consecutive frames into one denser point cloud, then run PC-SBL once
+
+**Why:** Directly addresses LiDAR sparsity — denser input should improve gap-filling. Tests whether PC-SBL's advantage scales with point density.
+**Complication:** Requires ego-pose registration across frames to avoid smearing (nuScenes ego_pose transforms needed). Medium complexity.
 
 ---
 
