@@ -2,18 +2,46 @@
 
 **Team:** Michael Ketler · Joani Gaxhi · Zain ul Abdin Khoso  
 **Course:** Autonomous Vehicles, Semester 1  
-**Interim presentation:** 2026-06-01  
+**Interim presentation:** 2026-06-01 (completed)  
 **Final presentation:** 2026-07-03
 
 ---
 
 ## What This Project Does
 
-We convert raw LiDAR point clouds from the nuScenes-mini dataset into a 2D occupancy grid map — a probabilistic representation of which cells in a 40×40 m environment are occupied by obstacles and which are free. This is a core perception component for autonomous driving.
+Converts raw LiDAR point clouds into probabilistic 2D occupancy grid maps — a core perception primitive for autonomous driving. We implement and compare two approaches:
 
-**Two-tier approach:**
-- **Tier 1 (Classical Bayesian):** Sequential log-odds updates using an inverse sensor model. Output: probability per cell.
-- **Tier 2 (PC-SBL, Önen 2024):** EM algorithm with sparsity-promoting Gamma prior and pattern-coupled spatial correlation. Output: binary map via thresholding.
+- **Tier 1 (Classical Bayesian OGM):** Sequential log-odds updates via an inverse sensor model. Dense output; fast; well-understood.
+- **Tier 2 (PC-SBL, Önen 2024):** Pattern-Coupled Sparse Bayesian Learning. EM algorithm with spatial coupling prior. Sparse, surface-accurate output with measured convergence guarantees.
+
+Both tiers are evaluated on nuScenes-mini (10 scenes) using angular NMSE and IoBB metrics from the Önen 2024 paper. A multi-frame accumulation extension is implemented for both tiers.
+
+---
+
+## Summary of Results
+
+All results at 80×80 grid, 0.5 m/cell, 40×40 m coverage, eval keyframe k=0.
+
+### Single-scan (Phase 7 — 10-scene mean)
+
+| Metric | T1 (Bayesian) | T2 β=0 (SBL) | T2 β=1 (PC-SBL) |
+|---|---|---|---|
+| NMSE | 0.1064 | 0.1503 | **0.1131** |
+| IoBB | 0.102 | 0.024 | 0.023 |
+| Precision | 0.073 | 0.059 | 0.059 |
+| Mean iters | — | 124 | **58** |
+| Converged | — | 4/10 | **10/10** |
+
+β=1 coupling: 24.7% NMSE reduction vs β=0, 2.1× faster convergence, 100% convergence rate.
+
+### Multi-frame (Phase 9 — w=2 window, λ=0.85, 10-scene mean)
+
+| Metric | T1 single | T1 multi (w=2) | T2 single | T2 multi (w=2) |
+|---|---|---|---|---|
+| IoBB | 0.102 | 0.144 | 0.023 | **0.056** |
+| Precision | — | — | — | 0.055 |
+
+T2 multi-frame closes 42% of the gap to T1 single (+0.033 absolute IoBB). Precision=0.055 confirms genuine coverage gain.
 
 ---
 
@@ -22,39 +50,37 @@ We convert raw LiDAR point clouds from the nuScenes-mini dataset into a 2D occup
 | Source | Key Idea |
 |---|---|
 | Elfes 1989 | Foundational OGM: probabilistic sensor model + Binary Bayes filter |
-| Stachniss SLAM Lecture (Freiburg) | Log-odds formulation, LiDAR inverse sensor model, full pseudocode |
-| Önen et al. 2024 (IEEE) | PC-SBL EM algorithm — fixes sparsity + spatial correlation for automotive LiDAR |
+| Stachniss, Freiburg SLAM Lecture | Log-odds formulation, LiDAR ISM, full pseudocode |
+| Önen et al. 2024 (IEEE Sensors J.) | PC-SBL EM — sparsity-promoting prior + spatial pattern coupling |
+| TU Delft (Joseph group, 2025) | Accelerated PC-SBL (angular sector decomposition reference) |
+| TU Delft — Dynamic OGM | Temporal PC-SBL via motion-augmented hyperprior (multi-frame reference) |
+| Robbiano et al. arXiv:1911.07915 | Recursive Bayesian OGM with correlated cells |
+| Mann et al. 2022 | Learned 4D occupancy prediction on nuScenes (related-work contrast) |
 
 ---
 
 ## Dataset — nuScenes-mini
 
-Download the NUScenes mini dataset from:
-https://www.nuscenes.org/download
-
-Place it in:
-v1.0-mini/
-
-Located at `v1.0-mini/`. This is the official [nuScenes](https://www.nuscenes.org/) mini split.
+Download from the [nuScenes website](https://www.nuscenes.org/download) and place at `v1.0-mini/`:
 
 ```
 v1.0-mini/
-├── v1.0-mini/          # JSON metadata
-│   ├── scene.json          # 10 driving scenes
-│   ├── sample.json         # keyframe samples per scene
-│   ├── sample_data.json    # sensor file pointers per sample
-│   ├── ego_pose.json       # vehicle position + orientation per timestamp
-│   ├── calibrated_sensor.json  # sensor-to-ego transforms
-│   ├── sample_annotation.json  # 3D bounding boxes (ground truth for IoBB)
+├── v1.0-mini/                  # JSON metadata
+│   ├── scene.json              # 10 driving scenes
+│   ├── sample.json             # keyframe samples per scene
+│   ├── sample_data.json        # sensor file pointers per sample
+│   ├── ego_pose.json           # vehicle position + orientation per timestamp
+│   ├── calibrated_sensor.json  # sensor-to-ego transforms (quaternion + translation)
+│   ├── sample_annotation.json  # 3D bounding boxes (ground-truth for IoBB)
 │   └── ...
 ├── samples/
-│   └── LIDAR_TOP/      # .pcd.bin files — raw LiDAR scans
-└── maps/               # BEV map tiles (PNG)
+│   └── LIDAR_TOP/              # .pcd.bin files — raw LiDAR scans
+└── maps/                       # BEV map tiles (not used)
 ```
 
-**LiDAR format:** Each `.pcd.bin` file is a flat binary array of `float32` values, 5 per point: `(x, y, z, intensity, ring_index)`. Points are in the **ego-vehicle coordinate frame** (x = forward, y = left, z = up). One scan contains ~34,000 points.
+**LiDAR format:** `.pcd.bin` = flat binary `float32`, 5 values per point: `(x, y, z, intensity, ring_index)`. Points are in the **LiDAR sensor frame**; the pipeline transforms them to ego frame via `calibrated_sensor.json`.
 
-**Key numbers:** 10 scenes · 404 keyframe samples · 3,935 LiDAR frames.
+**Key numbers:** 10 scenes · 404 keyframe samples · 3,935 LiDAR frames. ~4,800 points survive preprocessing per scan.
 
 ---
 
@@ -66,137 +92,205 @@ v1.0-mini/
 | Resolution | 0.5 × 0.5 m per cell |
 | Grid size | 80 × 80 = 6,400 cells |
 | Representation | log-odds per cell, clamped to [−5, +5] |
-| Ego center | grid cell (40, 40) — row 40, col 40 |
+| Ego center | grid cell (40, 40) |
 
 ---
 
-## Preprocessing Pipeline (4 Steps)
+## Preprocessing Pipeline
 
-Applied to every raw LiDAR scan before grid update:
+Applied to every raw LiDAR scan, in ego(j) frame before any transforms:
 
-1. **Height filter** — keep points with z ∈ [−2 m, +3 m]  
-   Removes ground clutter below the car and aerial noise above it.
+| Step | Operation | Module |
+|---|---|---|
+| 0 | Sensor → ego transform (calibrated_sensor quaternion) | `preprocessor.transform_to_ego` |
+| 1 | Height filter: keep z ∈ [0.3, 3.0] m | `preprocessor.height_filter` |
+| 2 | Range filter: keep points ≤ 20 m, ≥ 1.5 m radial | `preprocessor.range_filter` |
+| 3 | 3D → 2D BEV projection (drop z) | `preprocessor.project_bev` |
+| 4 | Discretize (x,y) → (row, col) | `preprocessor.discretize` |
 
-2. **Range filter** — keep points within ±20 m in x and y  
-   Matches the 40×40 m grid extent. Points outside are irrelevant.
-
-3. **3D → 2D projection** — drop the z coordinate  
-   Produces a Bird's Eye View (BEV) point set of (x, y) pairs.
-
-4. **Discretize** — map (x, y) → (row, col)  
-   `col = floor((x + 20) / 0.5)`, `row = floor((20 - y) / 0.5)`  
-   (x forward = larger col; y left = smaller row)
+The height filter must be applied in the scan's own ego frame before rotating to another frame — this is the critical constraint for correct multi-frame accumulation.
 
 ---
 
-## Inverse Sensor Model (Bresenham Ray Casting)
+## Inverse Sensor Model
 
-For each LiDAR point after preprocessing:
-- Cast a ray from the ego-vehicle center `(40, 40)` to the terminal grid cell `(row, col)`.
-- All cells **along the ray** (excluding terminal) get a **free** log-odds update: `l_free = log(0.3/0.7) ≈ −0.847`
-- The **terminal cell** gets an **occupied** log-odds update: `l_occ = log(0.7/0.3) ≈ +0.847`
-- Clamp all log-odds values to `[−5, +5]` after each update.
+For each LiDAR point (row, col) after preprocessing:
+- Cast Bresenham ray from ego (40,40) to terminal cell (row, col)
+- All **intermediate cells**: `l_free = log(0.3/0.7) ≈ −0.847`
+- **Terminal cell**: `l_occ = log(0.7/0.3) ≈ +0.847`
+- Per-scan free cells deduplicated (numpy repeated-index write applies once per cell)
+- Final log-odds clamped to [−5, +5]
+
+---
+
+## PC-SBL Model (Tier 2)
+
+**Observation model:** `y = C·f + e`, `e ~ N(0, (1/γ)·I)`
+
+**C matrix (2-equation):** For each of B occupied angular bins:
+- Row 1 (occupied): y=1, C[b, hit_cell]=1 only (terminal-cell localisation)
+- Row 2 (free): y=0, C[b+B, all_ray_cells]=free_weight (off-diagonal CᵀC coupling)
+
+**E-step:** `A = γ·CᵀC + diag(ξ)`, solved with `spsolve`. Diagonal of Φ estimated by Hutchinson (K=16 Rademacher probes) — avoids O(N³) inversion.
+
+**Pattern coupling (Fang 2015):** `ξ[n] = α[n] + β·Σ_{j∈L_n} α[j]`
+
+**M-step:** `ω[n] = v̂[n] + β·Σ_{j∈L_n} v̂[j]`, `α[n] = (2a+1)/(2b+ω[n])`
+
+**Optimal config (Phase 5):** β=1, γ=30, free_weight=0.5, hits_per_bin=3, tol=2e-3, max_iter=150, η_th=0.5
+
+---
+
+## Multi-frame Accumulation (Phase 9)
+
+**Transform chain:** Bring scan j's points into eval frame k's ego:
+```
+p_ego_k = R(q_k)ᵀ · (R(q_j) · p_ego_j + t_j − t_k)
+```
+
+**Tier 1 (decay log-odds):** `L(cell) = clip(Σ_{j∈W} λ^{|k-j|} · l_update_j(cell), -5, +5)`
+
+**Tier 2 (stacked C):** Stack C matrices from all window frames in ego(k), scaled by λ^{|k-j|}. Solve once with PC-SBL. More rows per cell = coverage the sparse method was starved for.
+
+**Config:** k=0, w=2 (5 frames), λ=0.85
+
+**Critical constraint:** Height filter applied in ego(j) BEFORE rotating to ego(k). Z-filter is only valid where z is vehicle-relative.
 
 ---
 
 ## Module Structure
 
 ```
-src/
-├── __init__.py
-├── data_loader.py       # Reads nuScenes JSON + loads .pcd.bin files
-├── preprocessor.py      # Height filter, range filter, 3D→2D, discretize
-├── occupancy_grid.py    # 80×80 log-odds grid data structure
-├── sensor_model.py      # Bresenham ray casting + log-odds update values
-├── bayesian_ogm.py      # Tier 1: Classical Bayesian update loop
-└── visualizer.py        # Matplotlib BEV grid visualization
-
-main.py                  # Entry point: run one scene through Tier 1
+lidar_gap_mapping/
+├── main.py                     # Entry point: CLI flags, T1/T2 single-scan, eval, logging
+├── build_report_figures.py     # Phase 8: generate 4 report figures
+├── run_multiframe_benchmark.py # Phase 9: window sweep w∈{0,1,2,4}, all 10 scenes
+├── run_accel_benchmark.py      # Phase 6: rectangular submap benchmark
+├── run_sector_benchmark.py     # Phase 7: angular sector benchmark
+├── check_iobb_overlay.py       # Phase 7: IoBB sanity visualizer
+│
+├── src/
+│   ├── data_loader.py          # NuScenesLoader: JSON + .pcd.bin reading
+│   ├── preprocessor.py         # transform_to_ego, height_filter, range_filter,
+│   │                           #   project_bev, discretize, preprocess
+│   ├── occupancy_grid.py       # 80×80 log-odds grid: update + sigmoid
+│   ├── sensor_model.py         # Bresenham ISM: bresenham, update_grid_from_scan
+│   ├── bayesian_ogm.py         # Tier 1: run_single_scan, run_bayesian_ogm
+│   ├── pc_sbl.py               # Tier 2: PCSBL EM, build_C_matrix, _build_neighbour_lists
+│   ├── pc_sbl_accel.py         # Phase 6: PCSBLAccel (rectangular tiles — negative result)
+│   ├── pc_sbl_sector.py        # Phase 7: PCSBLSector (angular sectors — accuracy preserved)
+│   ├── multiframe.py           # Phase 9: transform chain, multiframe_t1, multiframe_t2
+│   ├── metrics.py              # compute_iobb, compute_angular_nmse, compute_precision
+│   └── visualizer.py           # Greyscale BEV heatmap, GT box overlay
+│
+├── output/                     # Generated figures (gitignored)
+├── results/
+│   └── results_log.md          # Auto-appended experiment results (all 9 phases)
+├── v1.0-mini/                  # nuScenes-mini dataset (gitignored)
+├── README.md
+└── implementation.md           # Phase-by-phase implementation record
 ```
 
 ---
 
 ## Quick Start
 
-**Requirements:** Python 3.11+, numpy, scipy, matplotlib
+**Requirements:** Python 3.11+
 
 ```bash
-pip install numpy scipy matplotlib
+pip install numpy scipy matplotlib nuscenes-devkit
 ```
 
-**Run Tier 1 on one scene:**
-
+**Tier 1 single scan with evaluation:**
 ```bash
 ~/.pyenv/versions/3.11.9/bin/python3 main.py \
-    --data-root v1.0-mini \
-    --scene scene-0061 \
-    --out output/
+    --scene scene-0061 --single-scan --eval --no-show
 ```
 
-This will:
-1. Load all LiDAR scans for the scene
-2. Run preprocessing on each scan
-3. Accumulate Bayesian log-odds updates across all scans
-4. Save a PNG visualization of the final occupancy grid
+**Tier 2 PC-SBL β ablation:**
+```bash
+# β=0: decoupled SBL
+~/.pyenv/versions/3.11.9/bin/python3 main.py \
+    --scene scene-0061 --single-scan --tier2 --beta 0.0 --eval --no-show
 
----
+# β=1: full PC-SBL (optimal)
+~/.pyenv/versions/3.11.9/bin/python3 main.py \
+    --scene scene-0061 --single-scan --tier2 --beta 1.0 --eval --no-show
+```
 
-## Project Timeline
+**All 10 scenes sweep:**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 main.py --all-scenes --single-scan --eval --no-show
+```
 
-| Phase | Dates | Status | Goal |
-|---|---|---|---|
-| 1 — Literature + Concepts | May 13–18 | Done | Read all 3 sources, understood OGM theory |
-| 2 — Interim Prep | May 19–25 | Active | Slides uploaded, feedback written |
-| **3 — Classical Bayesian** | **May 19–Jun 01** | **Active** | **Working Tier 1 pipeline on nuScenes** |
-| 4 — PC-SBL EM | Jun 02–15 | Planned | Tier 2 EM algorithm from Önen 2024 |
-| 5 — Evaluation | Jun 16–25 | Planned | NMSE + IoBB metrics on all 10 scenes |
-| 6 — Report + Final | Jun 26–Jul 03 | Planned | Written report + final presentation |
+**Multi-frame benchmark (all 10 scenes, w∈{0,1,2,4}):**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 run_multiframe_benchmark.py
+```
 
----
+**Generate report figures:**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 build_report_figures.py
+```
 
-## What Needs to Happen Before June 01
-
-The Bayesian baseline pipeline must be running. Task breakdown:
-
-| Day | Task | Module |
-|---|---|---|
-| May 23–24 | Data loader: list scenes, load .pcd.bin per sample | `data_loader.py` |
-| May 24–25 | Preprocessing: filter + project + discretize | `preprocessor.py` |
-| May 25–26 | Occupancy grid + Bresenham ray tracing | `occupancy_grid.py`, `sensor_model.py` |
-| May 26–28 | Bayesian update loop over full scene | `bayesian_ogm.py` |
-| May 28–29 | Visualizer + sanity check (cone at 5m → grid row 40, col 50) | `visualizer.py` |
-| May 29–Jun 01 | Debug + clean output on multiple scenes | all |
+Results are appended to `results/results_log.md` after every run.
 
 ---
 
 ## Evaluation Metrics
 
-**NMSE (Normalized Mean Squared Error)**  
-`NMSE = mean((p_estimated − p_gt)²) / mean(p_gt²)`  
-Lower is better. Önen 2024 reports 0.1–0.3 on nuScenes.
+**Angular NMSE (Önen 2024):** `NMSE = ||d − d̂||² / ||d||²`
+- `d[i]` = closest LiDAR hit range in 1° angular bin i (ground-truth free-space distance)
+- `d̂[i]` = distance to first occupied cell (P > 0.5) along ray i in the estimated map
+- 360 bins; walker starts at r > 1.5 m to avoid self-return artifacts
+- Lower is better. T1 mean 0.106, T2(β=1) mean 0.113.
 
-**IoBB (Intersection over Bounding Box)**  
-For each annotated object in `sample_annotation.json`:  
-1. Project its 3D BEV bounding box onto the 80×80 grid.  
-2. Mark cells with `p > 0.5` as occupied.  
-3. `IoBB = |occupied_cells ∩ bbox_cells| / |bbox_cells|`  
-Higher is better. Threshold: cell probability > 0.5 = occupied.
+**IoBB (Intersection over Bounding Box):** `IoBB = |{P>0.5} ∩ box_cells| / |box_cells|`
+- Rotated 3D boxes from `sample_annotation.json` rasterized to BEV via `Path.contains_points`
+- Higher is better. T1 mean 0.102, T2(β=1) single 0.023, T2 multi 0.056.
+
+**Precision:** `Precision = |{P>0.5} ∩ box_cells| / |{P>0.5}|`
+- Fraction of predicted-occupied cells that fall inside GT boxes.
+- Guards against IoBB inflation via false positives.
 
 ---
 
-## Key Challenges and Mitigations
+## Project Phases
 
-| Challenge | Mitigation |
-|---|---|
-| Coordinate frame alignment | nuScenes .pcd.bin is already in ego-vehicle frame — no manual rotation needed. Unit test: point at x=5m → col 50. |
-| PC-SBL convergence | Start from paper defaults β=1, a=b=1. Cap at 100 EM iterations. Monitor `‖μ_t − μ_{t-1}‖₂`. Fall back to Tier 1 if diverges. |
-| C matrix size (~15k×6400) | Use `scipy.sparse.csr_matrix`. Memory drops from ~350 MB dense to ~5 MB sparse. |
-| Focus area without digital map | Skip focus masking. Apply range filter ±20m as sole spatial constraint. Document as known scope limitation. |
+| Phase | Dates | Status | Deliverable |
+|---|---|---|---|
+| 1 — Literature + Concepts | May 13–18 | ✅ Done | Understood OGM + PC-SBL theory |
+| 2 — Interim Prep | May 19–Jun 01 | ✅ Done | Interim presentation passed |
+| 3 — Tier 1 Classical OGM | May 19–Jun 01 | ✅ Done | Working Bayesian pipeline on nuScenes |
+| 4 — Tier 2 PC-SBL (Phase 2–3) | Jun 02–Jun 15 | ✅ Done | C matrix bug fixed; 10-scene eval |
+| 5 — PC-SBL coupling + tuning (Phase 4–5) | Jun 15 | ✅ Done | β coupling active; optimal config |
+| 6 — Acceleration (Phase 6–7) | Jun 15 | ✅ Done | Rectangular tiles (negative); sector (positive) |
+| 7 — Report figures (Phase 8) | Jun 15 | ✅ Done | 4 figures for report |
+| 8 — Multi-frame (Phase 9) | Jun 15 | ✅ Done | T2 IoBB 0.023→0.056 (+141%) |
+| 9 — Report + Final | Jun 22–Jul 03 | Active | Written report + slides (deadline Jul 6) |
+
+---
+
+## Key Findings
+
+1. **β coupling is universally beneficial:** NMSE reduction β=0→β=1 on all 10 scenes. 24.7% aggregate improvement. 2.1× faster convergence. 100% vs 40% convergence rate.
+
+2. **Rectangular submap partitioning breaks PC-SBL:** NMSE→1.0 because the ego position falls outside distant tile boundaries, severing the Bresenham free-ray constraint. This is a genuine algorithmic finding.
+
+3. **Angular sector partitioning preserves accuracy:** K=2,4 sectors give identical NMSE to K=1 because rays stay whole within each sector. Runtime improves only with a polar-grid implementation (N per sector < N total).
+
+4. **Multi-frame raises T2 coverage:** w=2 window raises T2 mean IoBB 0.023→0.056, closing 42% of the gap to T1 single (0.102). Precision=0.055 confirms genuine coverage gain. Ground removal must occur in each frame's own ego frame before transform.
+
+5. **T2 sparse surface vs T1 dense fill:** T2's low IoBB is structural — PC-SBL activates only surface-hit cells while GT boxes enclose full object volumes. Multi-frame partially compensates by accumulating surface hits from different angles.
 
 ---
 
 ## References
 
-1. Elfes, A. (1989). "Using occupancy grids for mobile robot perception and navigation." *IEEE Computer*, 22(6), 46–57.
+1. Elfes, A. (1989). Using occupancy grids for mobile robot perception and navigation. *IEEE Computer*, 22(6), 46–57.
 2. Stachniss, C. (2013). *Grid Maps* [Lecture slides]. University of Freiburg SLAM Course.
-3. Önen, M. et al. (2024). "Occupancy Grid Mapping for Automotive Driving Exploiting Clustered Sparsity." *IEEE*.
+3. Önen, Ç., Pandharipande, A., Joseph, G., & Myers, N. J. (2024). Occupancy Grid Mapping for Automotive Driving Exploiting Clustered Sparsity. *IEEE Sensors Journal*, 24(7), 9240–9250.
+4. Joseph, G., Myers, N. J., et al. (2025). Accelerated Pattern-Coupled Sparse Bayesian Learning for Automotive Occupancy Mapping. *IEEE Sensors Journal*, 25, 41801–41810.
+5. TU Delft group. *Dynamic Occupancy Grid Mapping for Automotive Vehicles Exploiting Temporal and Spatial Information* (temporal PC-SBL via motion-augmented hyperprior).
+6. Robbiano, C., Chong, M., Azimi-Sadjadi, M., Scharf, L., & Pezeshki, A. (2019). Bayesian Learning of Occupancy Grids. arXiv:1911.07915.
+7. Mann, M., Tomy, A., Paigwar, A., Renzaglia, A., & Laugier, C. (2022). Predicting Future Occupancy Grids in Dynamic Environments with Spatio-Temporal Learning. *IROS*.

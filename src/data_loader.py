@@ -32,6 +32,7 @@ class NuScenesLoader:
         self._sample_map = {s["token"]: s for s in self.samples}
         self._sd_map = {s["token"]: s for s in self.sample_data}
         self._ego_map = {e["token"]: e for e in self.ego_poses}
+        self._cs_map = {c["token"]: c for c in self.calibrated_sensors}
 
         # Map sample_token → list of sample_data for that sample
         self._sd_by_sample: dict[str, list] = {}
@@ -92,6 +93,22 @@ class NuScenesLoader:
         """Return the ego pose dict for a sample_data token."""
         sd = self._sd_map[sd_token]
         return self._ego_map[sd["ego_pose_token"]]
+
+    def get_calibrated_sensor(self, sd_token: str) -> dict:
+        """
+        Return calibrated_sensor dict for a sample_data token (LIDAR_TOP).
+
+        Contains:
+          translation: [x, y, z]  — sensor position in ego frame (metres)
+          rotation:    [w, x, y, z] — quaternion, sensor orientation in ego frame
+        Use this to transform raw LiDAR points from sensor frame to ego frame.
+        """
+        sd = self._sd_map[sd_token]
+        return self._cs_map[sd["calibrated_sensor_token"]]
+
+    def get_sample_token(self, sd_token: str) -> str:
+        """Return the sample_token (keyframe) for a given sample_data token."""
+        return self._sd_map[sd_token]["sample_token"]
 
     def get_annotations_for_sample(self, sample_token: str) -> list[dict]:
         """Return all 3D bounding box annotations for a keyframe sample."""

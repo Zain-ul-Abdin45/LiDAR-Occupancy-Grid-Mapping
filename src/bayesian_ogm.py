@@ -51,11 +51,12 @@ def run_single_scan(
 
     sd_token = lidar_tokens[scan_index]
     points = loader.load_lidar_points(sd_token)
-    cells = preprocess(points)
+    cs = loader.get_calibrated_sensor(sd_token)
+    cells = preprocess(points, cs=cs)
 
     if verbose:
         print(f"Single scan {scan_index+1}/{len(lidar_tokens)} — "
-              f"{len(cells)} points after filter")
+              f"{len(cells)} points after filter (sensor→ego transform applied)")
 
     update_grid_from_scan(grid, cells)
 
@@ -100,8 +101,11 @@ def run_bayesian_ogm(
 
     for i, sd_token in enumerate(lidar_tokens):
         points = loader.load_lidar_points(sd_token)
+        cs = loader.get_calibrated_sensor(sd_token)
 
-        pts = height_filter(points)
+        from .preprocessor import transform_to_ego
+        pts = transform_to_ego(points, cs)
+        pts = height_filter(pts)
         pts = range_filter(pts, half_range)
         xy = project_bev(pts)
 
