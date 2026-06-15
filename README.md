@@ -3,7 +3,7 @@
 **Team:** Michael Ketler · Joani Gaxhi · Zain ul Abdin Khoso  
 **Course:** Autonomous Vehicles, Semester 1  
 **Interim presentation:** 2026-06-01 (completed)  
-**Final presentation:** 2026-07-03
+**Final presentation:** 2026-07-13
 
 ---
 
