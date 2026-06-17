@@ -113,3 +113,96 @@ class NuScenesLoader:
     def get_annotations_for_sample(self, sample_token: str) -> list[dict]:
         """Return all 3D bounding box annotations for a keyframe sample."""
         return [a for a in self.annotations if a["sample_token"] == sample_token]
+
+class KittiLoader:
+    def __init__(self, data_root: str):
+        """
+        Expects a directory structure like:
+        data_root/
+        ├── sequences/
+        │   ├── 00/
+        │   │   ├── velodyne/
+        │   │   │   ├── 000000.bin
+        │   │   │   └── ...
+        └── poses/
+            ├── 00.txt
+            └── ...
+        """
+        self.data_root = data_root
+        self.sequences_dir = os.path.join(data_root, "sequences")
+        self.poses_dir = os.path.join(data_root, "poses")
+        
+        # Load all poses into memory (grouped by scene)
+        self._poses = self._load_all_poses()
+
+    def _load_all_poses(self) -> dict:
+        """KITTI poses are 3x4 transformation matrices flattened into rows."""
+        poses_map = {}
+        if not os.path.exists(self.poses_dir):
+            return poses_map
+            
+        for pose_file in os.listdir(self.poses_dir):
+            if not pose_file.endswith('.txt'):
+                continue
+            scene_name = pose_file.split('.')[0]
+            filepath = os.path.join(self.poses_dir, pose_file)
+            
+            # Load the text file into an N x 12 array, reshape to N x 3 x 4
+            poses = np.loadtxt(filepath).reshape(-1, 3, 4)
+            poses_map[scene_name] = poses
+        return poses_map
+
+    def list_scenes(self) -> list[dict]:
+        """Return available sequences mimicking the nuScenes dictionary format."""
+        scenes = []
+        if not os.path.exists(self.sequences_dir):
+            return scenes
+            
+        for seq in sorted(os.listdir(self.sequences_dir)):
+            seq_path = os.path.join(self.sequences_dir, seq, "velodyne")
+            if os.path.isdir(seq_path):
+                nbr_samples = len(os.listdir(seq_path))
+                scenes.append({
+                    "name": seq, 
+                    "description": f"KITTI Sequence {seq}",
+                    "nbr_samples": nbr_samples
+                })
+        return scenes
+
+    def get_scene_by_name(self, name: str) -> dict:
+        for s in self.list_scenes():
+            if s["name"] == name:
+                return s
+        raise ValueError(f"KITTI Scene '{name}' not found.")
+
+    def get_lidar_tokens_for_scene(self, scene: dict) -> list[str]:
+        """Create a fake 'token' by combining sequence and frame index."""
+        seq_path = os.path.join(self.sequences_dir, scene["name"], "velodyne")
+        files = sorted([f for f in os.listdir(seq_path) if f.endswith('.bin')])
+        
+        # Token format: "00|000005" (Scene | FrameIndex)
+        return [f"{scene['name']}|{f.split('.')[0]}" for f in files]
+
+    def load_lidar_points(self, token: str) -> np.ndarray:
+        """Load KITTI .bin files and reshape to (-1, 4)."""
+        scene_name, frame_id = token.split('|')
+        filepath = os.path.join(self.sequences_dir, scene_name, "velodyne", f"{frame_id}.bin")
+        
+        # KITTI uses 4 columns: x, y, z, reflectance
+        points = np.fromfile(filepath, dtype=np.float32).reshape(-1, 4)
+        return points
+
+    def get_ego_pose(self, token: str) -> dict:
+        """Extract the translation vector to match the nuScenes format."""
+        scene_name, frame_id = token.split('|')
+        frame_idx = int(frame_id)
+        
+        if scene_name not in self._poses:
+            # Fallback for single-scan mode if poses aren't downloaded
+            return {"translation": [0.0, 0.0, 0.0]}
+            
+        # Extract the translation (x, y, z) from the 3x4 pose matrix (last column)
+        pose_matrix = self._poses[scene_name][frame_idx]
+        translation = pose_matrix[:, 3].tolist()
+        
+        return {"translation": translation}

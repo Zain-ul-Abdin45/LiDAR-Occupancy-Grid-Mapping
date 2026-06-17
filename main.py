@@ -48,6 +48,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 
 from src.data_loader import NuScenesLoader
+from src.data_loader import KittiLoader
 from src.occupancy_grid import OccupancyGrid
 from src.bayesian_ogm import run_bayesian_ogm, run_single_scan
 from src.preprocessor import preprocess, transform_to_ego
@@ -61,6 +62,7 @@ RESULTS_LOG = os.path.join(os.path.dirname(__file__), "results", "results_log.md
 
 def parse_args():
     p = argparse.ArgumentParser(description="LiDAR OGM — Tier 1 and Tier 2 (PC-SBL)")
+    p.add_argument("--dataset", choices=["nuscenes", "kitti"], default="nuscenes", help="Which dataset format to use")
     p.add_argument("--data-root", default="v1.0-mini")
     p.add_argument("--scene", default="scene-0061")
     p.add_argument("--all-scenes", action="store_true")
@@ -373,8 +375,12 @@ def main():
     # Change working dir to script location so relative paths work
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-    print(f"Loading nuScenes-mini from: {args.data_root}")
-    loader = NuScenesLoader(args.data_root)
+    if args.dataset == "kitti":
+        print(f"Loading KITTI from: {args.data_root}")
+        loader = KittiLoader(args.data_root)
+    else:
+        print(f"Loading nuScenes-mini from: {args.data_root}")
+        loader = NuScenesLoader(args.data_root)
     scenes = loader.list_scenes()
     print(f"Found {len(scenes)} scenes:")
     for s in scenes:
