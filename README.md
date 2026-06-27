@@ -84,6 +84,30 @@ v1.0-mini/
 
 ---
 
+## Dataset — KITTI — Velodyne point clouds
+
+Download from the [cvlibs website]([https://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d]) and place at `kitti_data/`:
+
+Downloads:
+- Velodyne point clouds, if you want to use laser information (29 GB)
+- camera calibration matrices of object data set (16 MB)
+- training labels of object data set (5 MB)
+
+```
+kitti_data/
+├── training/
+│   ├── velodyne/       # .bin files (raw LiDAR)
+│   ├── calib/          # .txt files (calibration matrices)
+│   └── label_2/        # .txt files (3D bounding boxes)
+└── testing/
+    └── velodyne/       # .bin files
+```
+**LiDAR format:** `.bin` = flat binary `float32`, 4 values per point: `(x, y, z, intensity)`. Points are in the **Velodyne (LiDAR) sensor frame**; the pipeline must transform them to the ego frame using the projection matrices (`Tr_velo_to_cam` and `R0_rect`) found in `training/calib/`.
+
+**Key numbers:** ~14,999 total samples (7,481 training / 7,518 testing). A typical scan contains ~100,000 points; unlike nuScenes, this requires aggressive downsampling (e.g., voxel grid filtering) for consistent grid mapping performance.
+
+---
+
 ## Grid Parameters
 
 | Parameter | Value |
