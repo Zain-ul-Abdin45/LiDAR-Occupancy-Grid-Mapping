@@ -52,7 +52,7 @@ from src.data_loader import KittiLoader
 from src.occupancy_grid import OccupancyGrid
 from src.bayesian_ogm import run_bayesian_ogm, run_single_scan
 from src.preprocessor import preprocess, transform_to_ego
-from src.visualizer import plot_grid
+from src.visualizer import plot_grid, plot_bev_points, plot_image
 
 
 RESULTS_LOG = os.path.join(os.path.dirname(__file__), "results", "results_log.md")
@@ -63,10 +63,12 @@ RESULTS_LOG = os.path.join(os.path.dirname(__file__), "results", "results_log.md
 def parse_args():
     p = argparse.ArgumentParser(description="LiDAR OGM — Tier 1 and Tier 2 (PC-SBL)")
     p.add_argument("--dataset", choices=["nuscenes", "kitti"], default="nuscenes", help="Which dataset format to use")
-    p.add_argument("--data-root", default="v1.0-mini")
-    p.add_argument("--scene", default="scene-0061")
+    p.add_argument("--data-root", default=None,
+                   help="Dataset root directory. If omitted, uses v1.0-mini for nuScenes or kitti_data for KITTI")
+    p.add_argument("--scene", default=None, help="Scene name or KITTI frame id")
     p.add_argument("--all-scenes", action="store_true")
-    p.add_argument("--out", default="output")
+    p.add_argument("--out", default=None,
+                   help="Output directory. If omitted, uses output_nuscenes or output_kitti")
     p.add_argument("--no-show", action="store_true")
     p.add_argument("--grid-size", type=int, default=80)
     p.add_argument("--cell-size", type=float, default=0.5)
@@ -209,6 +211,23 @@ def process_scene(loader, scene_name, grid, args):
         pts_f = height_filter(pts_ego)
         pts_f = range_filter(pts_f, grid.grid_size * grid.cell_size / 2)
         points_xy_ego = project_bev(pts_f)
+
+        original_path = os.path.join(args.out, f"{scene_name}_original_scan{args.scan_index:02d}.png")
+        plot_bev_points(
+            points_xy_ego,
+            title=f"Original LiDAR BEV — {scene_name} scan {args.scan_index}",
+            save_path=original_path,
+            show=show,
+        )
+
+        camera_path = loader.get_camera_image_path(sd_token)
+        if camera_path is not None:
+            camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{args.scan_index:02d}.png")
+            plot_image(camera_path,
+                       title=f"KITTI camera image — {scene_name} scan {args.scan_index}",
+                       save_path=camera_save,
+                       show=show)
+
         # Annotations are in global frame — set origin to ego's world position
         ego_pose = loader.get_ego_pose(sd_token)
         origin_xy = np.array(ego_pose["translation"][:2])
@@ -220,7 +239,32 @@ def process_scene(loader, scene_name, grid, args):
         title = f"Bayesian OGM — {scene_name} (ego frame)"
         show_ego = True
         sd_token = lidar_tokens[0]
+        scan_index = 0
         sample_token = loader.get_sample_token(sd_token)
+
+        from src.preprocessor import height_filter, range_filter, project_bev
+        pts_raw = loader.load_lidar_points(sd_token)
+        cs = loader.get_calibrated_sensor(sd_token)
+        pts_ego = transform_to_ego(pts_raw, cs)
+        pts_f = height_filter(pts_ego)
+        pts_f = range_filter(pts_f, grid.grid_size * grid.cell_size / 2)
+        original_xy = project_bev(pts_f)
+        original_path = os.path.join(args.out, f"{scene_name}_original_scan{scan_index:02d}.png")
+        plot_bev_points(
+            original_xy,
+            title=f"Original LiDAR BEV — {scene_name}",
+            save_path=original_path,
+            show=show,
+        )
+
+        camera_path = loader.get_camera_image_path(sd_token)
+        if camera_path is not None:
+            camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{scan_index:02d}.png")
+            plot_image(camera_path,
+                       title=f"KITTI camera image — {scene_name} scan {scan_index}",
+                       save_path=camera_save,
+                       show=show)
+
         points_xy_ego = None
         origin_xy = None
 
@@ -231,7 +275,32 @@ def process_scene(loader, scene_name, grid, args):
         title = f"Bayesian OGM — {scene_name} (world frame)"
         show_ego = False
         sd_token = lidar_tokens[0]
+        scan_index = 0
         sample_token = loader.get_sample_token(sd_token)
+
+        from src.preprocessor import height_filter, range_filter, project_bev
+        pts_raw = loader.load_lidar_points(sd_token)
+        cs = loader.get_calibrated_sensor(sd_token)
+        pts_ego = transform_to_ego(pts_raw, cs)
+        pts_f = height_filter(pts_ego)
+        pts_f = range_filter(pts_f, grid.grid_size * grid.cell_size / 2)
+        original_xy = project_bev(pts_f)
+        original_path = os.path.join(args.out, f"{scene_name}_original_scan{scan_index:02d}.png")
+        plot_bev_points(
+            original_xy,
+            title=f"Original LiDAR BEV — {scene_name}",
+            save_path=original_path,
+            show=show,
+        )
+
+        camera_path = loader.get_camera_image_path(sd_token)
+        if camera_path is not None:
+            camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{scan_index:02d}.png")
+            plot_image(camera_path,
+                       title=f"KITTI camera image — {scene_name} scan {scan_index}",
+                       save_path=camera_save,
+                       show=show)
+
         # For world-frame: compute centroid for evaluation
         all_xy = np.array([
             loader.get_ego_pose(t)["translation"][:2] for t in lidar_tokens
@@ -372,6 +441,13 @@ def process_scene(loader, scene_name, grid, args):
 def main():
     args = parse_args()
 
+    if args.data_root is None:
+        args.data_root = "v1.0-mini" if args.dataset == "nuscenes" else "kitti_data"
+
+    # Use dataset-specific default output directories when the user did not override.
+    if args.out is None:
+        args.out = f"output_{args.dataset}"
+
     # Change working dir to script location so relative paths work
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -390,6 +466,16 @@ def main():
     os.makedirs(args.out, exist_ok=True)
 
     _ensure_results_log()
+
+    if args.scene is None:
+        if args.dataset == 'kitti' and len(scenes) == 1:
+            args.scene = scenes[0]['name']
+        elif args.dataset == 'nuscenes':
+            args.scene = 'scene-0061'
+        elif scenes:
+            args.scene = scenes[0]['name']
+        else:
+            raise ValueError("No scenes found in dataset root")
 
     if args.all_scenes:
         for s in scenes:

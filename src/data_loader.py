@@ -117,92 +117,193 @@ class NuScenesLoader:
 class KittiLoader:
     def __init__(self, data_root: str):
         """
-        Expects a directory structure like:
-        data_root/
-        ├── sequences/
-        │   ├── 00/
-        │   │   ├── velodyne/
-        │   │   │   ├── 000000.bin
-        │   │   │   └── ...
-        └── poses/
-            ├── 00.txt
-            └── ...
+        Supports KITTI object dataset layout.
+
+        Expected layout:
+          kitti_data/
+          ├── training/
+          │   ├── velodyne/
+          │   ├── calib/
+          │   └── label_2/
+          └── testing/
+              └── velodyne/
         """
         self.data_root = data_root
-        self.sequences_dir = os.path.join(data_root, "sequences")
-        self.poses_dir = os.path.join(data_root, "poses")
-        
-        # Load all poses into memory (grouped by scene)
-        self._poses = self._load_all_poses()
+        self.training_dir = os.path.join(data_root, "training")
+        self.testing_dir = os.path.join(data_root, "testing")
 
-    def _load_all_poses(self) -> dict:
-        """KITTI poses are 3x4 transformation matrices flattened into rows."""
-        poses_map = {}
-        if not os.path.exists(self.poses_dir):
-            return poses_map
-            
-        for pose_file in os.listdir(self.poses_dir):
-            if not pose_file.endswith('.txt'):
+        self._velodyne_dirs: dict[str, str] = {}
+        self._image_dirs: dict[str, str] = {}
+
+        if os.path.isdir(os.path.join(self.training_dir, "velodyne")):
+            self._velodyne_dirs["training"] = os.path.join(self.training_dir, "velodyne")
+        if os.path.isdir(os.path.join(self.training_dir, "image_2")):
+            self._image_dirs["training"] = os.path.join(self.training_dir, "image_2")
+        if os.path.isdir(os.path.join(self.testing_dir, "image_2")):
+            self._image_dirs["testing"] = os.path.join(self.testing_dir, "image_2")
+        if os.path.isdir(os.path.join(self.testing_dir, "velodyne")):
+            self._velodyne_dirs["testing"] = os.path.join(self.testing_dir, "velodyne")
+
+        for scene_name, vel_path in self._velodyne_dirs.items():
+            if not os.path.isdir(vel_path):
                 continue
-            scene_name = pose_file.split('.')[0]
-            filepath = os.path.join(self.poses_dir, pose_file)
-            
-            # Load the text file into an N x 12 array, reshape to N x 3 x 4
-            poses = np.loadtxt(filepath).reshape(-1, 3, 4)
-            poses_map[scene_name] = poses
-        return poses_map
+            for filename in os.listdir(vel_path):
+                if filename.endswith('.bin'):
+                    frame_id = os.path.splitext(filename)[0]
+
+        self._label_dir = os.path.join(self.training_dir, "label_2")
+        self._calib_cache: dict[str, dict] = {}
+
+
+    def _load_calibration(self, frame_id: str) -> dict | None:
+        if frame_id in self._calib_cache:
+            return self._calib_cache[frame_id]
+
+        calib_path = os.path.join(self.training_dir, "calib", f"{frame_id}.txt")
+        if not os.path.isfile(calib_path):
+            self._calib_cache[frame_id] = None
+            return None
+
+        calib = {}
+        with open(calib_path, 'r') as f:
+            for line in f:
+                if ':' not in line:
+                    continue
+                key, values = line.split(':', 1)
+                calib[key.strip()] = np.fromstring(values, sep=' ')
+
+        if 'Tr_velo_to_cam' in calib:
+            calib['Tr_velo_to_cam'] = calib['Tr_velo_to_cam'].reshape(3, 4)
+        if 'R0_rect' in calib:
+            calib['R0_rect'] = calib['R0_rect'].reshape(3, 3)
+
+        self._calib_cache[frame_id] = calib
+        return calib
+
+    def _camera_to_velo_transform(self, calib: dict) -> tuple[np.ndarray, np.ndarray]:
+        """Return rotation and translation from rectified camera to velodyne coordinates."""
+        R0_rect = calib['R0_rect']
+        Tr_velo_to_cam = calib['Tr_velo_to_cam']
+
+        R_velo_to_cam = Tr_velo_to_cam[:, :3]
+        t_velo_to_cam = Tr_velo_to_cam[:, 3]
+
+        R_cam_to_velo = (R0_rect @ R_velo_to_cam).T
+        t_cam_to_velo = -R_cam_to_velo @ (R0_rect @ t_velo_to_cam)
+        return R_cam_to_velo, t_cam_to_velo
 
     def list_scenes(self) -> list[dict]:
-        """Return available sequences mimicking the nuScenes dictionary format."""
+        """Return available KITTI scenes or sets."""
         scenes = []
-        if not os.path.exists(self.sequences_dir):
-            return scenes
-            
-        for seq in sorted(os.listdir(self.sequences_dir)):
-            seq_path = os.path.join(self.sequences_dir, seq, "velodyne")
-            if os.path.isdir(seq_path):
-                nbr_samples = len(os.listdir(seq_path))
-                scenes.append({
-                    "name": seq, 
-                    "description": f"KITTI Sequence {seq}",
-                    "nbr_samples": nbr_samples
-                })
+        scene_items = sorted(self._velodyne_dirs.items())
+
+        for name, path in scene_items:
+            nbr_samples = len([f for f in os.listdir(path) if f.endswith('.bin')])
+            scenes.append({
+                "name": name,
+                "description": f"KITTI {name}",
+                "nbr_samples": nbr_samples,
+            })
         return scenes
 
     def get_scene_by_name(self, name: str) -> dict:
         for s in self.list_scenes():
             if s["name"] == name:
                 return s
+
         raise ValueError(f"KITTI Scene '{name}' not found.")
 
     def get_lidar_tokens_for_scene(self, scene: dict) -> list[str]:
-        """Create a fake 'token' by combining sequence and frame index."""
-        seq_path = os.path.join(self.sequences_dir, scene["name"], "velodyne")
-        files = sorted([f for f in os.listdir(seq_path) if f.endswith('.bin')])
-        
-        # Token format: "00|000005" (Scene | FrameIndex)
-        return [f"{scene['name']}|{f.split('.')[0]}" for f in files]
+        if scene["name"] in self._velodyne_dirs:
+            seq_path = self._velodyne_dirs[scene["name"]]
+            files = sorted([f for f in os.listdir(seq_path) if f.endswith('.bin')])
+            return [f"{scene['name']}|{f.split('.')[0]}" for f in files]
+
+        raise ValueError(f"KITTI Scene '{scene['name']}' has no lidar files.")
 
     def load_lidar_points(self, token: str) -> np.ndarray:
-        """Load KITTI .bin files and reshape to (-1, 4)."""
         scene_name, frame_id = token.split('|')
-        filepath = os.path.join(self.sequences_dir, scene_name, "velodyne", f"{frame_id}.bin")
-        
-        # KITTI uses 4 columns: x, y, z, reflectance
+        if scene_name not in self._velodyne_dirs:
+            raise ValueError(f"KITTI scene '{scene_name}' not found for token '{token}'.")
+
+        seq_path = self._velodyne_dirs[scene_name]
+        filepath = os.path.join(seq_path, f"{frame_id}.bin")
         points = np.fromfile(filepath, dtype=np.float32).reshape(-1, 4)
         return points
 
+    def get_calibrated_sensor(self, token: str) -> dict:
+        """Return a simple transform from KITTI Velodyne sensor frame to ego frame."""
+        return {
+            "rotation": [1.0, 0.0, 0.0, 0.0],
+            "translation": [0.0, 0.0, 1.73],
+        }
+
+    def get_sample_token(self, sd_token: str) -> str:
+        return sd_token
+
+    def get_camera_image_path(self, sd_token: str) -> str | None:
+        scene_name, frame_id = sd_token.split('|')
+        if scene_name not in self._image_dirs:
+            return None
+
+        for ext in ['.png', '.jpg', '.jpeg']:
+            path = os.path.join(self._image_dirs[scene_name], f"{frame_id}{ext}")
+            if os.path.isfile(path):
+                return path
+        return None
+
+    def get_annotations_for_sample(self, sample_token: str) -> list[dict]:
+        scene_name, frame_id = sample_token.split('|')
+        if scene_name != 'training':
+            return []
+
+        label_path = os.path.join(self._label_dir, f"{frame_id}.txt")
+        if not os.path.isfile(label_path):
+            return []
+
+        calib = self._load_calibration(frame_id)
+        if calib is None:
+            return []
+
+        R_cam_to_velo, t_cam_to_velo = self._camera_to_velo_transform(calib)
+        sensor_offset = np.array([0.0, 0.0, 1.73], dtype=np.float64)
+
+        annotations = []
+        with open(label_path, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if not parts or parts[0] == 'DontCare':
+                    continue
+                try:
+                    h = float(parts[8])
+                    w = float(parts[9])
+                    l = float(parts[10])
+                    x_cam = float(parts[11])
+                    y_cam = float(parts[12])
+                    z_cam = float(parts[13])
+                    rot_y = float(parts[14])
+                except (ValueError, IndexError):
+                    continue
+
+                loc_cam = np.array([x_cam, y_cam, z_cam], dtype=np.float64)
+                loc_velo = R_cam_to_velo @ loc_cam + t_cam_to_velo
+                loc_ego = loc_velo + sensor_offset
+
+                dir_cam = np.array([np.sin(rot_y), 0.0, np.cos(rot_y)], dtype=np.float64)
+                dir_velo = R_cam_to_velo @ dir_cam
+                yaw_velo = np.arctan2(dir_velo[1], dir_velo[0])
+
+                qw = float(np.cos(yaw_velo / 2.0))
+                qz = float(np.sin(yaw_velo / 2.0))
+
+                annotations.append({
+                    "translation": loc_ego.tolist(),
+                    "size": [w, l, h],
+                    "rotation": [qw, 0.0, 0.0, qz],
+                })
+
+        return annotations
+
     def get_ego_pose(self, token: str) -> dict:
-        """Extract the translation vector to match the nuScenes format."""
-        scene_name, frame_id = token.split('|')
-        frame_idx = int(frame_id)
-        
-        if scene_name not in self._poses:
-            # Fallback for single-scan mode if poses aren't downloaded
-            return {"translation": [0.0, 0.0, 0.0]}
-            
-        # Extract the translation (x, y, z) from the 3x4 pose matrix (last column)
-        pose_matrix = self._poses[scene_name][frame_idx]
-        translation = pose_matrix[:, 3].tolist()
-        
-        return {"translation": translation}
+        """Return a default ego pose for KITTI object scans."""
+        return {"translation": [0.0, 0.0, 0.0]}

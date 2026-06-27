@@ -5,6 +5,10 @@ v1.0-mini/
 *.ply
 *.bag
 
+kitti_data/
+output/
+output_kitti/
+
 # Python
 __pycache__/
 *.pyc

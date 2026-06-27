@@ -86,3 +86,54 @@ def plot_probability_histogram(grid: OccupancyGrid, title: str = "Cell Probabili
     plt.title(title)
     plt.tight_layout()
     plt.show()
+
+
+def plot_bev_points(
+    points_xy: np.ndarray,
+    title: str = "LiDAR BEV",
+    save_path: str | None = None,
+    show: bool = True,
+):
+    """Plot bird's-eye-view points and optionally save the figure."""
+    fig, ax = plt.subplots(figsize=(7, 7))
+    ax.scatter(points_xy[:, 0], points_xy[:, 1], s=0.5, c="k", alpha=0.4)
+    ax.set_xlabel("x (forward) →  metres")
+    ax.set_ylabel("y (left) →  metres")
+    ax.set_title(title)
+    ax.set_aspect("equal", adjustable="box")
+    plt.tight_layout()
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=150)
+        print(f"Saved → {save_path}")
+
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
+
+
+def plot_image(
+    image_path: str,
+    title: str = "Camera Image",
+    save_path: str | None = None,
+    show: bool = True,
+):
+    """Display a camera image and optionally save it."""
+    image = plt.imread(image_path)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.imshow(image)
+    ax.axis('off')
+    ax.set_title(title)
+    plt.tight_layout()
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=150)
+        print(f"Saved → {save_path}")
+
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)

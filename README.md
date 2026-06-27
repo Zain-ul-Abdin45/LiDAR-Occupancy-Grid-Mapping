@@ -84,6 +84,32 @@ v1.0-mini/
 
 ---
 
+## Dataset — KITTI — Velodyne point clouds
+
+Download from the [cvlibs website](https://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d) and place at `kitti_data/`:
+
+Downloads:
+- Velodyne point clouds, if you want to use laser information (29 GB)
+- camera calibration matrices of object data set (16 MB)
+- training labels of object data set (5 MB)
+    - Optional: left color images of object data set (12 GB). These are only needed if you want the loader to save matched KITTI camera images from `training/image_2/`.
+
+```
+kitti_data/
+├── training/
+│   ├── velodyne/       # .bin files (raw LiDAR)
+│   ├── calib/          # .txt files (calibration matrices)
+│   ├── image_2/        # optional camera images
+│   └── label_2/        # .txt files (3D bounding boxes)
+└── testing/
+    └── velodyne/       # .bin files
+```
+**LiDAR format:** `.bin` = flat binary `float32`, 4 values per point: `(x, y, z, intensity)`. Points are in the **Velodyne (LiDAR) sensor frame**; the pipeline must transform them to the ego frame using the projection matrices (`Tr_velo_to_cam` and `R0_rect`) found in `training/calib/`.
+
+**Key numbers:** ~14,999 total samples (7,481 training / 7,518 testing). A typical scan contains ~100,000 points; unlike nuScenes, this requires aggressive downsampling (e.g., voxel grid filtering) for consistent grid mapping performance.
+
+---
+
 ## Grid Parameters
 
 | Parameter | Value |
@@ -170,7 +196,7 @@ lidar_gap_mapping/
 ├── check_iobb_overlay.py       # Phase 7: IoBB sanity visualizer
 │
 ├── src/
-│   ├── data_loader.py          # NuScenesLoader: JSON + .pcd.bin reading
+│   ├── data_loader.py          # NuScenesLoader/KittiLoader: dataset loading and LiDAR reading
 │   ├── preprocessor.py         # transform_to_ego, height_filter, range_filter,
 │   │                           #   project_bev, discretize, preprocess
 │   ├── occupancy_grid.py       # 80×80 log-odds grid: update + sigmoid
@@ -204,18 +230,33 @@ pip install numpy scipy matplotlib nuscenes-devkit
 **Tier 1 single scan with evaluation:**
 ```bash
 ~/.pyenv/versions/3.11.9/bin/python3 main.py \
-    --scene scene-0061 --single-scan --eval --no-show
+    --dataset nuscenes --scene scene-0061 --single-scan --eval --no-show
 ```
+
+**Tier 1 KITTI single scan:**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 main.py \
+    --dataset kitti --scene training --single-scan --no-show
+```
+
+**Tier 1 KITTI frame lookup:**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 main.py \
+    --dataset kitti --scene 000000 --single-scan --no-show
+```
+
+Original BEV point cloud images are saved as `*_original_scanXX.png` in the output directory to ease result checking.
+If KITTI left images are present under `training/image_2/`, the matched camera image will also be saved as `*_camera_scanXX.png`.
 
 **Tier 2 PC-SBL β ablation:**
 ```bash
 # β=0: decoupled SBL
 ~/.pyenv/versions/3.11.9/bin/python3 main.py \
-    --scene scene-0061 --single-scan --tier2 --beta 0.0 --eval --no-show
+    --dataset nuscenes --scene scene-0061 --single-scan --tier2 --beta 0.0 --eval --no-show
 
 # β=1: full PC-SBL (optimal)
 ~/.pyenv/versions/3.11.9/bin/python3 main.py \
-    --scene scene-0061 --single-scan --tier2 --beta 1.0 --eval --no-show
+    --dataset nuscenes --scene scene-0061 --single-scan --tier2 --beta 1.0 --eval --no-show
 ```
 
 **All 10 scenes sweep:**
