@@ -306,4 +306,7 @@ class KittiLoader:
 
     def get_ego_pose(self, token: str) -> dict:
         """Return a default ego pose for KITTI object scans."""
-        return {"translation": [0.0, 0.0, 0.0]}
+        return {
+            "translation": [0.0, 0.0, 0.0],
+            "rotation": [1.0, 0.0, 0.0, 0.0],
+        }

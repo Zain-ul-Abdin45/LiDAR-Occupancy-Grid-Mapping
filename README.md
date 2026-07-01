@@ -248,6 +248,13 @@ pip install numpy scipy matplotlib nuscenes-devkit
 Original BEV point cloud images are saved as `*_original_scanXX.png` in the output directory to ease result checking.
 If KITTI left images are present under `training/image_2/`, the matched camera image will also be saved as `*_camera_scanXX.png`.
 
+**KITTI benchmark commands:**
+```bash
+python run_accel_benchmark.py --dataset kitti --data-root kitti_data
+python run_sector_benchmark.py --dataset kitti --data-root kitti_data
+python run_multiframe_benchmark.py --dataset kitti --data-root kitti_data
+```
+
 **Tier 2 PC-SBL β ablation:**
 ```bash
 # β=0: decoupled SBL

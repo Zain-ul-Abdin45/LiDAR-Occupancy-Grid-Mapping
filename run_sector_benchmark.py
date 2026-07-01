@@ -13,6 +13,7 @@ Outputs:
 Run:
     ~/.pyenv/versions/3.11.9/bin/python3 run_sector_benchmark.py
 """
+import argparse
 import sys, os
 import numpy as np
 import matplotlib
@@ -22,7 +23,7 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, ".")
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-from src.data_loader import NuScenesLoader
+from src.data_loader import NuScenesLoader, KittiLoader
 from src.preprocessor import transform_to_ego, height_filter, range_filter, project_bev
 from src.pc_sbl import PCSBL
 from src.pc_sbl_sector import PCSBLSector
@@ -31,12 +32,13 @@ from src.occupancy_grid import OccupancyGrid
 from src.metrics import compute_angular_nmse, compute_iobb, compute_precision
 
 # ── Config ───────────────────────────────────────────────────────────────────
-DATA_ROOT = "v1.0-mini"
+DEFAULT_DATA_ROOT = "v1.0-mini"
+KITTIDATA_ROOT = "kitti_data"
 GRID_SIZE = 80
 CELL_SIZE = 0.5
 THRESHOLD = 0.5
 N_SECTORS = [1, 2, 4, 8]
-SCENES    = ["scene-0061", "scene-0916", "scene-1077"]
+DEFAULT_SCENES    = ["scene-0061", "scene-0916", "scene-1077"]
 
 # Phase 5 optimal config
 PCSBL_KWARGS = dict(
@@ -46,7 +48,32 @@ PCSBL_KWARGS = dict(
     free_weight=0.5, verbose=False,
 )
 
-loader = NuScenesLoader(DATA_ROOT)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Angular-sector benchmark for nuscenes or kitti.")
+    parser.add_argument("--dataset", choices=["nuscenes", "kitti"], default="nuscenes",
+                        help="Dataset to benchmark (default: nuscenes)")
+    parser.add_argument("--data-root", default=None,
+                        help="Root directory for dataset files")
+    parser.add_argument("--out", default=None,
+                        help="Output directory for benchmark files. Defaults to output_nuscenes or output_kitti.")
+    return parser.parse_args()
+
+
+def get_loader(dataset: str, data_root: str):
+    if dataset == "kitti":
+        return KittiLoader(data_root)
+    return NuScenesLoader(data_root)
+
+
+args = parse_args()
+root = args.data_root if args.data_root is not None else (
+    KITTIDATA_ROOT if args.dataset == "kitti" else DEFAULT_DATA_ROOT
+)
+args.out = args.out if args.out is not None else f"output_{args.dataset}"
+loader = get_loader(args.dataset, root)
+SCENES = [scene["name"] for scene in loader.list_scenes()] if args.dataset == "kitti" else DEFAULT_SCENES
+EVAL_SCENES = SCENES if args.dataset != "kitti" else [name for name in SCENES if name == "training"]
+os.makedirs(args.out, exist_ok=True)
 
 
 def load_scene(scene_name):
@@ -116,11 +143,7 @@ print("Part 2: T1 vs β=0 vs β=1 — NMSE / IoBB / Precision / Iters")
 print("=" * 60)
 
 # 10-scene sweep for iters-to-converge table
-ALL_SCENES = [
-    "scene-0061", "scene-0103", "scene-0553", "scene-0655",
-    "scene-0757", "scene-0796", "scene-0916", "scene-1077",
-    "scene-1094", "scene-1100",
-]
+ALL_SCENES = SCENES
 
 print("\n{:<14} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8}".format(
     "Scene",
@@ -130,7 +153,7 @@ print("\n{:<14} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8}".format(
 ))
 
 rows = []
-for scene_name in ALL_SCENES:
+for scene_name in EVAL_SCENES:
     print(f"\n  {scene_name} ...", flush=True)
     pts_xy, sample_token, origin_xy, annotations, sd_tok = load_scene(scene_name)
     ego_xy = np.zeros(2)
@@ -241,9 +264,9 @@ print(f"β=1 beats T1 on Prec: {n_beat_prec}/10")
 print(f"Mean iters-to-converge: β=0 = {m_iters_b0:.0f},  β=1 = {m_iters_b1:.0f}")
 
 # ── Save tables ───────────────────────────────────────────────────────────────
-os.makedirs("output", exist_ok=True)
+os.makedirs(args.out, exist_ok=True)
 
-with open("output/precision_table.txt", "w") as f:
+with open(os.path.join(args.out, "precision_table.txt"), "w", encoding="utf-8") as f:
     f.write("Phase 5 config: β=1, γ=30, fw=0.5, hits=3, tol=2e-3, 80×80 @ 0.5m\n\n")
     f.write(f"{'Scene':<14} | T1 NMSE  T1 IoBB  T1 Prec | b0 NMSE  b0 IoBB  b0 Prec | b1 NMSE  b1 IoBB  b1 Prec | b1<T1(NMSE)  b1>T1(Prec)\n")
     f.write("-" * 110 + "\n")
@@ -263,7 +286,7 @@ with open("output/precision_table.txt", "w") as f:
     f.write(f"\nβ=1 beats T1 on NMSE: {n_beat_nmse}/10\n")
     f.write(f"β=1 beats T1 on Prec: {n_beat_prec}/10\n")
 
-with open("output/iters_table.txt", "w") as f:
+with open(os.path.join(args.out, "iters_table.txt"), "w", encoding="utf-8") as f:
     f.write("Iters-to-converge: β=0 vs β=1  (tol=2e-3, max_iter=150)\n\n")
     f.write(f"{'Scene':<14}  b0_iters  b0_cvg  b1_iters  b1_cvg  speedup\n")
     f.write("-" * 60 + "\n")
@@ -275,8 +298,8 @@ with open("output/iters_table.txt", "w") as f:
     f.write(f"{'mean':<14}  {m_iters_b0:>8.0f}           {m_iters_b1:>8.0f}\n")
     f.write(f"\nβ=1 converges {m_iters_b0/m_iters_b1:.1f}× faster than β=0 on average\n")
 
-print(f"\nSaved → output/precision_table.txt")
-print(f"Saved → output/iters_table.txt")
+print(f"\nSaved → {os.path.join(args.out, 'precision_table.txt')}")
+print(f"Saved → {os.path.join(args.out, 'iters_table.txt')}")
 
 # ── Plot: sector sweep ─────────────────────────────────────────────────────────
 fig, (ax_time, ax_nmse) = plt.subplots(1, 2, figsize=(13, 5))
@@ -319,5 +342,5 @@ fig.suptitle("Angular-Sector PC-SBL — Accuracy Preservation\n"
              "(β=1, γ=30, fw=0.5, 80×80 @ 0.5m)",
              fontsize=12, fontweight='bold')
 plt.tight_layout()
-plt.savefig("output/sector_benchmark.png", dpi=150, bbox_inches='tight')
-print("Saved → output/sector_benchmark.png")
+plt.savefig(os.path.join(args.out, "sector_benchmark.png"), dpi=150, bbox_inches='tight')
+print(f"Saved → {os.path.join(args.out, 'sector_benchmark.png')}")
