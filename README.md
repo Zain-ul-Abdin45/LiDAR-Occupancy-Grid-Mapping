@@ -3,7 +3,7 @@
 **Team:** Michael Ketler · Joani Gaxhi · Zain ul Abdin Khoso  
 **Course:** Autonomous Vehicles, Semester 1  
 **Interim presentation:** 2026-06-01 (completed)  
-**Final presentation:** 2026-07-13
+**Final presentation:** 2026-07-13 14:20
 
 ---
 
@@ -15,6 +15,7 @@ Converts raw LiDAR point clouds into probabilistic 2D occupancy grid maps — a 
 - **Tier 2 (PC-SBL, Önen 2024):** Pattern-Coupled Sparse Bayesian Learning. EM algorithm with spatial coupling prior. Sparse, surface-accurate output with measured convergence guarantees.
 
 Both tiers are evaluated on nuScenes-mini (10 scenes) using angular NMSE and IoBB metrics from the Önen 2024 paper. A multi-frame accumulation extension is implemented for both tiers.
+
 
 ---
 
@@ -286,6 +287,8 @@ lidar_gap_mapping/
 ```bash
 ./run_full_version.sh
 ```
+*Takes around 46 minutes to execute
+
 Runs T1/T2 on all nuScenes scenes, the multi-frame sweep, both KITTI benchmarks, both acceleration
 ablations, report figures, and the cross-dataset comparison chart, in order. Appends to
 `results/results_log.md`, writes figures to `output/`. Takes ~45–90 minutes (PC-SBL's EM loop runs
@@ -388,16 +391,16 @@ Results are appended to `results/results_log.md` after every run.
 
 | Phase | Dates | Status | Deliverable |
 |---|---|---|---|
-| 1 — Literature + Concepts | May 13–18 | ✅ Done | Understood OGM + PC-SBL theory |
-| 2 — Interim Prep | May 19–Jun 01 | ✅ Done | Interim presentation passed |
-| 3 — Tier 1 Classical OGM | May 19–Jun 01 | ✅ Done | Working Bayesian pipeline on nuScenes |
-| 4 — Tier 2 PC-SBL (Phase 2–3) | Jun 02–Jun 15 | ✅ Done | C matrix bug fixed; 10-scene eval |
-| 5 — PC-SBL coupling + tuning (Phase 4–5) | Jun 15 | ✅ Done | β coupling active; optimal config |
-| 6 — Acceleration (Phase 6–7) | Jun 15 | ✅ Done | Rectangular tiles (negative); sector (positive) |
-| 7 — Report figures (Phase 8) | Jun 15 | ✅ Done | 4 figures for report |
-| 8 — Multi-frame (Phase 9) | Jun 15 | ✅ Done | T2 IoBB 0.023→0.056 (+141%) |
-| 9 — KITTI generalization (Phase 10) | Jun 15 | ✅ Done | 50-frame KITTI 3D Object benchmark, unmodified pipeline |
-| 9b — KITTI Odometry generalization (Phase 10b) | Jul 04 | ✅ Done | 50-frame KITTI Odometry benchmark, single+multi-frame NMSE |
+| 1 — Literature + Concepts | May 13–18 | Done | Understood OGM + PC-SBL theory |
+| 2 — Interim Prep | May 19–Jun 01 | Done | Interim presentation passed |
+| 3 — Tier 1 Classical OGM | May 19–Jun 01 | Done | Working Bayesian pipeline on nuScenes |
+| 4 — Tier 2 PC-SBL (Phase 2–3) | Jun 02–Jun 15 | Done | C matrix bug fixed; 10-scene eval |
+| 5 — PC-SBL coupling + tuning (Phase 4–5) | Jun 15 | Done | β coupling active; optimal config |
+| 6 — Acceleration (Phase 6–7) | Jun 15 | Done | Rectangular tiles (negative); sector (positive) |
+| 7 — Report figures (Phase 8) | Jun 15 | Done | 4 figures for report |
+| 8 — Multi-frame (Phase 9) | Jun 15 | Done | T2 IoBB 0.023→0.056 (+141%) |
+| 9 — KITTI generalization (Phase 10) | Jun 15 | Done | 50-frame KITTI 3D Object benchmark, unmodified pipeline |
+| 9b — KITTI Odometry generalization (Phase 10b) | Jul 04 | Done | 50-frame KITTI Odometry benchmark, single+multi-frame NMSE |
 | 10 — Report + Final | Jun 22–Jul 13 | Active | Written report + slides |
 
 ---
