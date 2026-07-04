@@ -1,0 +1,12 @@
+Cross-dataset comparison — nuScenes vs KITTI 3D Object vs KITTI Odometry
+==============================================================================
+
+Metric                            nuScenes      KITTI 3D     KITTI Odo
+T1 NMSE (single)                    0.1064        0.0248        0.0264
+T2 β=1 NMSE (single)                0.1131        0.0347        0.0320
+T1 NMSE (multi w=2)                      —             —        0.0319
+T2 β=1 NMSE (multi w=2)                  —             —        0.0396
+T1 IoBB (single)                    0.1020        0.0270           n/a
+T2 β=1 IoBB (single)                0.0230        0.0230           n/a
+T1 IoBB (multi w=2)                 0.1440             —             —
+T2 β=1 IoBB (multi w=2)             0.0560             —             —

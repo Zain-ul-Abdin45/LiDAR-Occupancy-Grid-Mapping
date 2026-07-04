@@ -220,7 +220,7 @@ def process_scene(loader, scene_name, grid, args):
             show=show,
         )
 
-        camera_path = loader.get_camera_image_path(sd_token)
+        camera_path = loader.get_camera_image_path(sd_token) if hasattr(loader, "get_camera_image_path") else None
         if camera_path is not None:
             camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{args.scan_index:02d}.png")
             plot_image(camera_path,
@@ -257,7 +257,7 @@ def process_scene(loader, scene_name, grid, args):
             show=show,
         )
 
-        camera_path = loader.get_camera_image_path(sd_token)
+        camera_path = loader.get_camera_image_path(sd_token) if hasattr(loader, "get_camera_image_path") else None
         if camera_path is not None:
             camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{scan_index:02d}.png")
             plot_image(camera_path,
@@ -293,7 +293,7 @@ def process_scene(loader, scene_name, grid, args):
             show=show,
         )
 
-        camera_path = loader.get_camera_image_path(sd_token)
+        camera_path = loader.get_camera_image_path(sd_token) if hasattr(loader, "get_camera_image_path") else None
         if camera_path is not None:
             camera_save = os.path.join(args.out, f"{scene_name}_camera_scan{scan_index:02d}.png")
             plot_image(camera_path,

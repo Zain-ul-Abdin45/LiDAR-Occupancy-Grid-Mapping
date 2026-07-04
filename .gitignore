@@ -20,8 +20,17 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Personal study notes (not project deliverables)
+# Personal / working docs (not pushed — README.md is the only doc deliverable)
 \# LiDAR OGM — Baby Steps Study Notes.md
+implementation.md
+kitti_dataset.md
+src/project_details.md
+results/results_log_v1.md
+
+# Presentation decks (not pushed)
+*.pptx
+*.ppt
+AUV-Project-02-LiDAR OGM.pdf
 
 # OS
 .DS_Store
