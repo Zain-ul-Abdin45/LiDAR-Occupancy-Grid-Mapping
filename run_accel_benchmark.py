@@ -9,6 +9,7 @@ Generates output/accel_benchmark.png with:
 Run:
     ~/.pyenv/versions/3.11.9/bin/python3 run_accel_benchmark.py
 """
+import argparse
 import sys, os
 import numpy as np
 import matplotlib
@@ -18,18 +19,19 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, ".")
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-from src.data_loader import NuScenesLoader
+from src.data_loader import NuScenesLoader, KittiLoader
 from src.preprocessor import transform_to_ego, height_filter, range_filter, project_bev
 from src.pc_sbl_accel import PCSBLAccel
 from src.metrics import compute_angular_nmse
 
 # ── Config ──────────────────────────────────────────────────────────────────
-DATA_ROOT    = "v1.0-mini"
-SCENES       = ["scene-0061", "scene-0916", "scene-1077"]
-SUBMAP_GRIDS = [1, 2, 4]           # partition sizes to benchmark
-GRID_SIZE    = 80
-CELL_SIZE    = 0.5
-THRESHOLD    = 0.5
+DEFAULT_DATA_ROOT = "v1.0-mini"
+KITTIDATA_ROOT = "kitti_data"
+DEFAULT_SCENES   = ["scene-0061", "scene-0916", "scene-1077"]
+SUBMAP_GRIDS     = [1, 2, 4]           # partition sizes to benchmark
+GRID_SIZE        = 80
+CELL_SIZE        = 0.5
+THRESHOLD        = 0.5
 
 # Phase 5 optimal PCSBL parameters
 PCSBL_KWARGS = dict(
@@ -45,8 +47,31 @@ PCSBL_KWARGS = dict(
     verbose       = False,
 )
 
-# ── Data loading ─────────────────────────────────────────────────────────────
-loader = NuScenesLoader(DATA_ROOT)
+def parse_args():
+    parser = argparse.ArgumentParser(description="Submap benchmark for nuscenes or kitti.")
+    parser.add_argument("--dataset", choices=["nuscenes", "kitti"], default="nuscenes",
+                        help="Dataset to benchmark (default: nuscenes)")
+    parser.add_argument("--data-root", default=None,
+                        help="Root directory for dataset files")
+    parser.add_argument("--out", default=None,
+                        help="Output directory for benchmark files. Defaults to output_nuscenes or output_kitti.")
+    return parser.parse_args()
+
+
+def get_loader(dataset: str, data_root: str):
+    if dataset == "kitti":
+        return KittiLoader(data_root)
+    return NuScenesLoader(data_root)
+
+
+args = parse_args()
+root = args.data_root if args.data_root is not None else (
+    KITTIDATA_ROOT if args.dataset == "kitti" else DEFAULT_DATA_ROOT
+)
+args.out = args.out if args.out is not None else f"output_{args.dataset}"
+loader = get_loader(args.dataset, root)
+SCENES = [scene["name"] for scene in loader.list_scenes()] if args.dataset == "kitti" else DEFAULT_SCENES
+os.makedirs(args.out, exist_ok=True)
 
 def load_scene_points(scene_name: str):
     scene  = loader.get_scene_by_name(scene_name)
@@ -176,7 +201,7 @@ fig.suptitle(
 )
 plt.tight_layout()
 
-os.makedirs("output", exist_ok=True)
-out_path = "output/accel_benchmark.png"
+os.makedirs(args.out, exist_ok=True)
+out_path = os.path.join(args.out, "accel_benchmark.png")
 plt.savefig(out_path, dpi=150, bbox_inches='tight')
 print(f"\nSaved → {out_path}")

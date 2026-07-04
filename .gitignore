@@ -7,6 +7,9 @@ kitti_odometry/
 *.ply
 *.bag
 
+kitti_data/
+output_kitti/
+
 # Python
 __pycache__/
 *.pyc
