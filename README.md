@@ -105,9 +105,12 @@ v1.0-mini/
 
 ## Dataset — KITTI (generalization check)
 
-> **Note:** two parallel KITTI integrations exist right now and need to be reconciled —
-> `src/kitti_loader.py`/`src/kitti_odometry_loader.py` (this branch, reads from `kitti/`) vs.
-> the `KittiLoader` merged into `src/data_loader.py` (reads from `kitti_data/`). Pick one before final submission.
+> **Note:** two KITTI loaders are intentionally kept side by side —
+> `src/kitti_loader.py` (3D Object Detection split, reads from `kitti/training/`, used by `run_kitti_benchmark.py`
+> for the single-frame Phase 10 generalization check) and `src/kitti_odometry_loader.py`
+> (Odometry split, reads from `kitti_odometry/dataset/`, used by `run_kitti_odometry_benchmark.py`
+> for multi-frame accumulation now that KITTI odometry poses give us ego pose). `KittiLoader` in
+> `src/data_loader.py` is an older single-file variant kept for `main.py`'s `--dataset kitti` single-scan path.
 
 Used only for Phase 10 cross-dataset generalization (single-frame, no ego pose available). See [kitti_dataset.md](kitti_dataset.md) for the full download/setup guide and `run_kitti_benchmark.py` for the benchmark script.
 
@@ -131,6 +134,27 @@ testing/
 **LiDAR format:** `.bin` = flat binary `float32`, 4 values per point: `(x, y, z, intensity)`. Points are in the **Velodyne (LiDAR) sensor frame**; the pipeline must transform them to the ego frame using the projection matrices (`Tr_velo_to_cam` and `R0_rect`) found in `training/calib/`.
 
 **Key numbers:** ~14,999 total samples (7,481 training / 7,518 testing). A typical scan contains ~100,000 points; unlike nuScenes, this requires aggressive downsampling (e.g., voxel grid filtering) for consistent grid mapping performance.
+
+### KITTI Odometry (multi-frame generalization check)
+
+The 3D Object split has no per-frame ego pose, so KITTI multi-frame accumulation isn't possible there.
+KITTI Odometry provides ground-truth poses per frame, enabling a second Phase-10-style benchmark:
+T1/T2 single-scan plus the multi-frame window evaluation, run via `run_kitti_odometry_benchmark.py`
+against `src/kitti_odometry_loader.py`. No IoBB (no box annotations) — evaluation is NMSE only.
+
+```
+kitti_odometry/
+└── dataset/
+    ├── sequences/
+    │   ├── 00/
+    │   │   ├── velodyne/     # .bin files
+    │   │   └── calib.txt
+    │   └── ...
+    └── poses/
+        └── 00.txt            # pose per frame (12 floats, cam0→world)
+```
+
+Download from the [cvlibs odometry page](https://www.cvlibs.net/datasets/kitti/eval_odometry.php): `data_odometry_velodyne.zip` (~80 GB, sequences 00–02 sufficient for testing), `data_odometry_calib.zip`, `data_odometry_poses.zip`.
 
 ---
 
@@ -217,13 +241,14 @@ lidar_gap_mapping/
 ├── run_multiframe_benchmark.py # Phase 9: window sweep w∈{0,1,2,4}, all 10 scenes
 ├── run_accel_benchmark.py      # Phase 6: rectangular submap benchmark
 ├── run_sector_benchmark.py     # Phase 7: angular sector benchmark
-├── run_kitti_benchmark.py      # Phase 10: KITTI generalization benchmark
+├── run_kitti_benchmark.py      # Phase 10: KITTI 3D Object generalization benchmark (single-frame, NMSE+IoBB)
+├── run_kitti_odometry_benchmark.py # Phase 10b: KITTI Odometry benchmark (single+multi-frame, NMSE only)
 ├── check_iobb_overlay.py       # Phase 7: IoBB sanity visualizer
 │
 ├── src/
 │   ├── data_loader.py          # NuScenesLoader/KittiLoader: dataset loading and LiDAR reading
-│   ├── kitti_loader.py         # KITTILoader (parallel impl, reads from kitti/): velodyne/calib/label_2 reading
-│   ├── kitti_odometry_loader.py # KITTIOdometryLoader: sequences/poses reading for odometry benchmark
+│   ├── kitti_loader.py         # KITTILoader: KITTI 3D Object split (kitti/training/) — velodyne/calib/label_2
+│   ├── kitti_odometry_loader.py # KITTIOdometryLoader: KITTI Odometry split (kitti_odometry/dataset/) — sequences+poses
 │   ├── preprocessor.py         # transform_to_ego, height_filter, range_filter,
 │   │                           #   project_bev, discretize, preprocess
 │   ├── occupancy_grid.py       # 80×80 log-odds grid: update + sigmoid
@@ -242,6 +267,7 @@ lidar_gap_mapping/
 │   └── results_log.md          # Auto-appended experiment results (all 10 phases)
 ├── v1.0-mini/                  # nuScenes-mini dataset (gitignored)
 ├── kitti/                      # KITTI 3D object detection split (gitignored)
+├── kitti_odometry/             # KITTI odometry split (gitignored)
 ├── README.md
 ├── kitti_dataset.md            # KITTI setup guide
 └── implementation.md           # Phase-by-phase implementation record
@@ -314,6 +340,12 @@ python run_multiframe_benchmark.py --dataset kitti --data-root kitti_data
 **KITTI generalization benchmark (50 frames, see [kitti_dataset.md](kitti_dataset.md) for setup):**
 ```bash
 ~/.pyenv/versions/3.11.9/bin/python3 run_kitti_benchmark.py
+```
+
+**KITTI Odometry benchmark (single + multi-frame, NMSE only):**
+```bash
+~/.pyenv/versions/3.11.9/bin/python3 run_kitti_odometry_benchmark.py \
+    --sequence 00 --n-frames 50 --window 2
 ```
 
 Results are appended to `results/results_log.md` after every run.

@@ -20,5 +20,8 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
+# Personal study notes (not project deliverables)
+\# LiDAR OGM — Baby Steps Study Notes.md
+
 # OS
 .DS_Store
