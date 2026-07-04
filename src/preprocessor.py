@@ -44,9 +44,14 @@ def transform_to_ego(points: np.ndarray, cs: dict) -> np.ndarray:
     Returns:
         (N, 5) points with xyz in ego frame, intensity/ring unchanged.
     """
-    # nuScenes quaternion is [w, x, y, z]; scipy expects [x, y, z, w]
-    q = cs["rotation"]  # [w, x, y, z]
-    R = Rotation.from_quat([q[1], q[2], q[3], q[0]]).as_matrix()  # 3×3
+    rot = cs["rotation"]
+    if isinstance(rot, np.ndarray) and rot.shape == (3, 3):
+        # Pre-built rotation matrix (e.g. from KITTILoader)
+        R = rot.astype(np.float64)
+    else:
+        # nuScenes quaternion [w, x, y, z]; scipy expects [x, y, z, w]
+        q = rot
+        R = Rotation.from_quat([q[1], q[2], q[3], q[0]]).as_matrix()
     t = np.array(cs["translation"], dtype=np.float64)
 
     xyz = points[:, :3].astype(np.float64)

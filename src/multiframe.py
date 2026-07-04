@@ -37,6 +37,8 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.spatial.transform import Rotation
 
+from typing import Any
+
 from .data_loader import NuScenesLoader
 from .preprocessor import transform_to_ego, height_filter, range_filter, project_bev, discretize
 from .occupancy_grid import OccupancyGrid
@@ -76,7 +78,7 @@ def transform_ego_j_to_ego_k(pts_ego_j: np.ndarray,
 
 # ── load + preprocess window of scans ────────────────────────────────────────
 
-def load_window(loader: NuScenesLoader,
+def load_window(loader: Any,
                 scene_name: str,
                 k: int = 0,
                 w: int = 2,
@@ -143,7 +145,7 @@ def load_window(loader: NuScenesLoader,
 
 # ── Tier-1 multi-frame ────────────────────────────────────────────────────────
 
-def multiframe_t1(loader: NuScenesLoader,
+def multiframe_t1(loader: Any,
                   scene_name: str,
                   k: int = 0,
                   w: int = 2,
@@ -191,7 +193,7 @@ def multiframe_t1(loader: NuScenesLoader,
 
 # ── Tier-2 multi-frame ────────────────────────────────────────────────────────
 
-def multiframe_t2(loader: NuScenesLoader,
+def multiframe_t2(loader: Any,
                   scene_name: str,
                   k: int = 0,
                   w: int = 2,

@@ -25,6 +25,9 @@ Angular NMSE (Önen 2024 definition):
 import numpy as np
 from matplotlib.path import Path
 
+# KITTI eval classes (imported by run_kitti_benchmark for consistency)
+KITTI_EVAL_CLASSES = {"Car", "Van", "Truck", "Pedestrian", "Cyclist", "Person_sitting"}
+
 
 # ─────────────────────────── Ground truth construction ──────────────────────
 
@@ -308,3 +311,155 @@ def compute_angular_nmse(prob_map: np.ndarray,
     nmse = float(np.sum((dg - de) ** 2) / np.sum(dg ** 2))
 
     return {"nmse": nmse, "d_gt": d_gt, "d_est": d_est}
+
+
+# ─────────────────────────── KITTI IoBB metric ──────────────────────────────
+
+def _kitti_box_bev(cx_ego: float, cy_ego: float,
+                   w: float, l: float, rot_y: float) -> np.ndarray:
+    """
+    Compute 4 BEV corners of a KITTI box in z-up ego frame.
+
+    KITTI rotation_y is the rotation around the camera y-axis (= yaw in BEV).
+    After cam→ego rotation (R_cam_to_ego): ego_x = x_cam, ego_y = z_cam,
+    so the BEV plane is (ego_x, ego_y) and yaw direction is preserved.
+
+    Args:
+        cx_ego, cy_ego: box centre in ego BEV (metres from ego origin)
+        w, l:           KITTI width and length in metres
+        rot_y:          KITTI rotation_y (radians)
+
+    Returns:
+        (4, 2) ndarray — corners in ego BEV frame
+    """
+    cos_r, sin_r = np.cos(rot_y), np.sin(rot_y)
+    hw, hl = w / 2.0, l / 2.0
+    # KITTI local box: length along z (forward), width along x (right)
+    local = np.array([
+        [ hl,  hw],
+        [ hl, -hw],
+        [-hl, -hw],
+        [-hl,  hw],
+    ])
+    rot = np.array([[cos_r, -sin_r], [sin_r, cos_r]])
+    corners = local @ rot.T + np.array([cx_ego, cy_ego])
+    return corners
+
+
+def compute_iobb_kitti(prob_map: np.ndarray,
+                       kitti_labels: list[dict],
+                       grid_size: int,
+                       cell_size: float,
+                       threshold: float = 0.5) -> dict:
+    """
+    Compute IoBB for KITTI annotations.
+
+    Box centres are expressed in KITTI camera frame (x_cam, y_cam, z_cam).
+    After the cam→ego rotation applied in KITTILoader.get_calibrated_sensor():
+        ego_x = x_cam   (right)
+        ego_y = z_cam   (forward)
+    No additional origin_xy shift needed — ego IS the camera at each frame.
+
+    Args:
+        prob_map:     (grid_size, grid_size) float — P(occupied) per cell
+        kitti_labels: list of dicts from KITTILoader.get_annotations_for_frame()
+        grid_size, cell_size: grid parameters (must match how prob_map was built)
+        threshold:    P decision threshold (default 0.5)
+
+    Returns:
+        dict with keys: iobb_mean, iobb_per_object (list), n_objects
+    """
+    if not kitti_labels:
+        return {"iobb_mean": float("nan"), "iobb_per_object": [], "n_objects": 0}
+
+    half = grid_size * cell_size / 2.0
+    occupied = prob_map > threshold
+
+    # Build cell-centre grid (ego frame, same convention as nuScenes metrics)
+    xs = np.linspace(-half + cell_size / 2, half - cell_size / 2, grid_size)
+    ys = np.linspace(-half + cell_size / 2, half - cell_size / 2, grid_size)
+    gx, gy = np.meshgrid(xs, ys)
+    cell_centres = np.stack([
+        gx.ravel(),
+        (np.flipud(gy)).ravel(),
+    ], axis=1)  # (N_cells, 2)
+
+    iobb_values = []
+    for lbl in kitti_labels:
+        x_cam, _, z_cam = lbl["location"]  # y_cam is height (down), not used
+        # cam→ego: ego_x = x_cam, ego_y = z_cam (forward)
+        cx_ego, cy_ego = float(x_cam), float(z_cam)
+
+        # Skip boxes outside the grid
+        if abs(cx_ego) > half or abs(cy_ego) > half:
+            continue
+
+        _, w, l = lbl["dimensions"]   # (h, w, l)
+        rot_y = lbl["rotation_y"]
+        corners = _kitti_box_bev(cx_ego, cy_ego, w, l, rot_y)
+
+        path = Path(corners)
+        box_mask = path.contains_points(cell_centres).reshape(grid_size, grid_size)
+        n_box = int(box_mask.sum())
+        if n_box == 0:
+            continue
+        n_hit = int((occupied & box_mask).sum())
+        iobb_values.append(n_hit / n_box)
+
+    if not iobb_values:
+        return {"iobb_mean": float("nan"), "iobb_per_object": [], "n_objects": 0}
+
+    return {
+        "iobb_mean": float(np.mean(iobb_values)),
+        "iobb_per_object": iobb_values,
+        "n_objects": len(iobb_values),
+    }
+
+
+def compute_precision_kitti(prob_map: np.ndarray,
+                             kitti_labels: list[dict],
+                             grid_size: int,
+                             cell_size: float,
+                             threshold: float = 0.5) -> dict:
+    """
+    Precision for KITTI: fraction of predicted-occupied cells inside GT boxes.
+
+    Returns:
+        dict with keys: precision, n_predicted, n_true_positive
+    """
+    if not kitti_labels:
+        return {"precision": float("nan"), "n_predicted": 0, "n_true_positive": 0}
+
+    half = grid_size * cell_size / 2.0
+    occupied = prob_map > threshold
+    n_predicted = int(occupied.sum())
+
+    if n_predicted == 0:
+        return {"precision": float("nan"), "n_predicted": 0, "n_true_positive": 0}
+
+    xs = np.linspace(-half + cell_size / 2, half - cell_size / 2, grid_size)
+    ys = np.linspace(-half + cell_size / 2, half - cell_size / 2, grid_size)
+    gx, gy = np.meshgrid(xs, ys)
+    cell_centres = np.stack([
+        gx.ravel(),
+        (np.flipud(gy)).ravel(),
+    ], axis=1)
+
+    gt_map = np.zeros((grid_size, grid_size), dtype=bool)
+    for lbl in kitti_labels:
+        x_cam, _, z_cam = lbl["location"]
+        cx_ego, cy_ego = float(x_cam), float(z_cam)
+        if abs(cx_ego) > half or abs(cy_ego) > half:
+            continue
+        _, w, l = lbl["dimensions"]
+        corners = _kitti_box_bev(cx_ego, cy_ego, w, l, lbl["rotation_y"])
+        path = Path(corners)
+        box_mask = path.contains_points(cell_centres).reshape(grid_size, grid_size)
+        gt_map |= box_mask
+
+    n_true_positive = int((occupied & gt_map).sum())
+    return {
+        "precision": float(n_true_positive / n_predicted),
+        "n_predicted": n_predicted,
+        "n_true_positive": n_true_positive,
+    }
