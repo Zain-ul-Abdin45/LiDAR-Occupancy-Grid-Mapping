@@ -43,12 +43,12 @@ for ax, scene_name in zip(axes, SCENES):
             beta=beta,
             max_iter=150,
             tol=2e-3,
-            gamma_fixed=50.0,
+            gamma_fixed=30.0,
             alpha_damping=0.3,
             hits_per_bin=3,
             grid_size_sbl=GRID_SIZE,
             cell_size_sbl=CELL_SIZE,
-            free_weight=1.0,
+            free_weight=0.5,
             verbose=False,
         )
         result = sbl.run(points_xy, ego_xy=ego_xy)

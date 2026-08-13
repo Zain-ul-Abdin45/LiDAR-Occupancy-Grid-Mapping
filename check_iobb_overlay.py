@@ -149,7 +149,7 @@ for scene_name in SCENES:
                  f"Red outlines = GT boxes (ego-centric).  "
                  f"Colored dots = predicted occupied cells (P>{THRESHOLD}).",
                  fontsize=11)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.90])
     out_path = f"output/iobb_overlay_{scene_name}.png"
     plt.savefig(out_path, dpi=150, bbox_inches='tight')
     print(f"  Saved → {out_path}")

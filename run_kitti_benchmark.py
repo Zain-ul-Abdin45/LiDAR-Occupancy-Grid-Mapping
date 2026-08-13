@@ -178,7 +178,7 @@ def _save_benchmark_plot(rows: list[dict]):
         if d:
             labels_plot.append(name)
             colors.append(color_map[name])
-    bp = ax.boxplot([t1_nmse, t2b0, t2b1], labels=["T1", "T2 β=0", "T2 β=1"],
+    bp = ax.boxplot([t1_nmse, t2b0, t2b1], tick_labels=["T1", "T2 β=0", "T2 β=1"],
                     patch_artist=True, medianprops={"color": "black"})
     for patch, color in zip(bp["boxes"], colors):
         patch.set_facecolor(color)

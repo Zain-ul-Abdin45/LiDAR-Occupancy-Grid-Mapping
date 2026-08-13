@@ -1,0 +1,11 @@
+Iters-to-converge: β=0 vs β=1  (tol=2e-3, max_iter=150)
+
+Scene           b0_iters  b0_cvg  b1_iters  b1_cvg  speedup
+------------------------------------------------------------
+scene-0061           103    True        62    True    1.66×
+scene-0916           126    True        79    True    1.59×
+scene-1077           150   False        46    True    3.26×
+------------------------------------------------------------
+mean                 126                 62
+
+β=1 converges 2.0× faster than β=0 on average

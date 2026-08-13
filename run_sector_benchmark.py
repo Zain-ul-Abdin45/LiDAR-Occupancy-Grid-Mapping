@@ -6,9 +6,9 @@ Tests:
   2. Precision metric for T1 vs T2(β=0) vs T2(β=1) across 3 scenes
 
 Outputs:
-  output/sector_benchmark.png   — NMSE + runtime vs K (sector sweep)
-  output/precision_table.txt    — T1/β=0/β=1 precision comparison
-  output/iters_table.txt        — iters-to-converge for β=0 vs β=1
+  output/sector_benchmark.png          — NMSE + runtime vs K (sector sweep)
+  output/sector_precision_table.txt    — T1/β=0/β=1 precision comparison (3-scene subset)
+  output/sector_iters_table.txt        — iters-to-converge for β=0 vs β=1 (3-scene subset)
 
 Run:
     ~/.pyenv/versions/3.11.9/bin/python3 run_sector_benchmark.py
@@ -259,14 +259,14 @@ print(
     f"{m_nmse_b1:>8.4f} {m_iobb_b1:>8.3f} {m_prec_b1:>8.3f} {m_iters_b1:>6.0f} "
     f"{'':>6}"
 )
-print(f"\nβ=1 beats T1 on NMSE: {n_beat_nmse}/10")
-print(f"β=1 beats T1 on Prec: {n_beat_prec}/10")
+print(f"\nβ=1 beats T1 on NMSE: {n_beat_nmse}/{len(rows)}")
+print(f"β=1 beats T1 on Prec: {n_beat_prec}/{len(rows)}")
 print(f"Mean iters-to-converge: β=0 = {m_iters_b0:.0f},  β=1 = {m_iters_b1:.0f}")
 
 # ── Save tables ───────────────────────────────────────────────────────────────
 os.makedirs(args.out, exist_ok=True)
 
-with open(os.path.join(args.out, "precision_table.txt"), "w", encoding="utf-8") as f:
+with open(os.path.join(args.out, "sector_precision_table.txt"), "w", encoding="utf-8") as f:
     f.write("Phase 5 config: β=1, γ=30, fw=0.5, hits=3, tol=2e-3, 80×80 @ 0.5m\n\n")
     f.write(f"{'Scene':<14} | T1 NMSE  T1 IoBB  T1 Prec | b0 NMSE  b0 IoBB  b0 Prec | b1 NMSE  b1 IoBB  b1 Prec | b1<T1(NMSE)  b1>T1(Prec)\n")
     f.write("-" * 110 + "\n")
@@ -283,10 +283,10 @@ with open(os.path.join(args.out, "precision_table.txt"), "w", encoding="utf-8") 
             f"{m_nmse_t1:>7.4f}  {m_iobb_t1:>7.3f}  {m_prec_t1:>7.3f} | "
             f"{m_nmse_b0:>7.4f}  {m_iobb_b0:>7.3f}  {m_prec_b0:>7.3f} | "
             f"{m_nmse_b1:>7.4f}  {m_iobb_b1:>7.3f}  {m_prec_b1:>7.3f}\n")
-    f.write(f"\nβ=1 beats T1 on NMSE: {n_beat_nmse}/10\n")
-    f.write(f"β=1 beats T1 on Prec: {n_beat_prec}/10\n")
+    f.write(f"\nβ=1 beats T1 on NMSE: {n_beat_nmse}/{len(rows)}\n")
+    f.write(f"β=1 beats T1 on Prec: {n_beat_prec}/{len(rows)}\n")
 
-with open(os.path.join(args.out, "iters_table.txt"), "w", encoding="utf-8") as f:
+with open(os.path.join(args.out, "sector_iters_table.txt"), "w", encoding="utf-8") as f:
     f.write("Iters-to-converge: β=0 vs β=1  (tol=2e-3, max_iter=150)\n\n")
     f.write(f"{'Scene':<14}  b0_iters  b0_cvg  b1_iters  b1_cvg  speedup\n")
     f.write("-" * 60 + "\n")
@@ -298,8 +298,8 @@ with open(os.path.join(args.out, "iters_table.txt"), "w", encoding="utf-8") as f
     f.write(f"{'mean':<14}  {m_iters_b0:>8.0f}           {m_iters_b1:>8.0f}\n")
     f.write(f"\nβ=1 converges {m_iters_b0/m_iters_b1:.1f}× faster than β=0 on average\n")
 
-print(f"\nSaved → {os.path.join(args.out, 'precision_table.txt')}")
-print(f"Saved → {os.path.join(args.out, 'iters_table.txt')}")
+print(f"\nSaved → {os.path.join(args.out, 'sector_precision_table.txt')}")
+print(f"Saved → {os.path.join(args.out, 'sector_iters_table.txt')}")
 
 # ── Plot: sector sweep ─────────────────────────────────────────────────────────
 fig, (ax_time, ax_nmse) = plt.subplots(1, 2, figsize=(13, 5))
