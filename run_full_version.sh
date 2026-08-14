@@ -19,35 +19,38 @@ PY=~/.pyenv/versions/3.11.9/bin/python3
 
 log() { echo -e "\n=== [$(date +%H:%M:%S)] $1 ===\n"; }
 
-log "1/10 T1 — nuScenes, all 10 scenes, single-scan"
+log "1/11 T1 — nuScenes, all 10 scenes, single-scan"
 $PY main.py --dataset nuscenes --all-scenes --single-scan --eval --no-show --out output
 
-log "2/10 T2 (PC-SBL beta=1) — nuScenes, all 10 scenes, single-scan"
+log "2/11 T2 (PC-SBL beta=1) — nuScenes, all 10 scenes, single-scan"
 $PY main.py --dataset nuscenes --all-scenes --single-scan --tier2 --beta 1.0 --eval --no-show --out output
 
-log "3/10 Multi-frame sweep (T1+T2, w in {0,1,2,4}) — nuScenes, all 10 scenes"
+log "3/11 Multi-frame sweep (T1+T2, w in {0,1,2,4}) — nuScenes, all 10 scenes"
 $PY run_multiframe_benchmark.py --out output
 
-log "4/10 KITTI 3D Object — T1/T2 generalization benchmark (50 frames)"
+log "4/11 KITTI 3D Object — T1/T2 generalization benchmark (50 frames)"
 $PY run_kitti_benchmark.py
 
-log "5/10 KITTI Odometry — T1/T2 single+multi-frame benchmark (50 frames, seq 00)"
+log "5/11 KITTI Odometry — T1/T2 single+multi-frame benchmark (50 frames, seq 00)"
 $PY run_kitti_odometry_benchmark.py --sequence 00 --n-frames 50 --window 2
 
-log "6/10 Hyperparameter — acceleration ablation (rectangular submap grid)"
+log "6/11 Hyperparameter — acceleration ablation (rectangular submap grid)"
 $PY run_accel_benchmark.py --out output
 
-log "7/10 Hyperparameter — angular sector ablation + precision metric"
+log "7/11 Hyperparameter — angular sector ablation + precision metric"
 $PY run_sector_benchmark.py --out output
 
-log "8/10 Report figures (tradeoff, coupling, convergence, beta sweep)"
+log "8/11 Report figures (tradeoff, coupling, convergence, beta sweep)"
 $PY build_report_figures.py
 
-log "9/10 Cross-dataset comparison graph (nuScenes vs KITTI 3D vs KITTI Odometry)"
+log "9/11 Cross-dataset comparison graph (nuScenes vs KITTI 3D vs KITTI Odometry)"
 $PY build_cross_dataset_comparison.py
 
-log "10/10 EM convergence trace and single-frame IoBB overlays (Figures 3, 5)"
+log "10/11 EM convergence trace and single-frame IoBB overlays (Figures 3, 5)"
 $PY plot_convergence.py
 $PY check_iobb_overlay.py
+
+log "11/11 PC-SBL hyperparameter sensitivity (gamma, free-row weight)"
+$PY run_hyperparam_sensitivity.py --out output
 
 log "Done. Results in results/results_log.md, figures in output/."
