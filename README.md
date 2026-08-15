@@ -3,7 +3,7 @@
 **Team:** Michael Ketler · Joani Gaxhi · Zain ul Abdin Khoso  
 **Course:** Autonomous Vehicles, Semester 1  
 **Interim presentation:** 2026-06-01 (completed)  
-**Final presentation:** 2026-07-13 14:20
+**Final presentation:** 2026-10-01, 13:20–13:40 (Group 2, second examination term)
 
 ---
 
@@ -16,6 +16,22 @@ Converts raw LiDAR point clouds into probabilistic 2D occupancy grid maps — a 
 
 Both tiers are evaluated on nuScenes-mini (10 scenes) using angular NMSE and IoBB metrics from the Önen 2024 paper. A multi-frame accumulation extension is implemented for both tiers.
 
+---
+
+## How to Run This
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Download nuScenes-mini and/or KITTI and place under v1.0-mini/, kitti/, kitti_odometry/
+#    — see "Dataset — nuScenes-mini" / "Dataset — KITTI" below for exact directory layout and links
+
+# 3. Reproduce every result in the report, end to end (~45-90 min)
+./run_full_version.sh
+```
+
+For a single quick scan instead of the full run, or to inspect individual benchmarks, see **Quick Start** further down for the full command list. Full setup detail (dataset directory trees, download links) is under **Dataset — nuScenes-mini** / **Dataset — KITTI** below.
 
 ---
 
@@ -31,7 +47,7 @@ All results at 80×80 grid, 0.5 m/cell, 40×40 m coverage, eval keyframe k=0.
 | IoBB | 0.102 | 0.024 | 0.023 |
 | Precision | 0.073 | 0.059 | 0.059 |
 | Mean iters | — | 124 | **58** |
-| Converged | — | 4/10 | **10/10** |
+| Converged | — | 5/10 | **10/10** |
 
 β=1 coupling: 24.7% NMSE reduction vs β=0, 2.1× faster convergence, 100% convergence rate.
 
@@ -40,7 +56,7 @@ All results at 80×80 grid, 0.5 m/cell, 40×40 m coverage, eval keyframe k=0.
 | Metric | T1 single | T1 multi (w=2) | T2 single | T2 multi (w=2) |
 |---|---|---|---|---|
 | IoBB | 0.102 | 0.144 | 0.023 | **0.056** |
-| Precision | — | — | — | 0.055 |
+| Precision | 0.073 | — | 0.059 | 0.055 |
 
 T2 multi-frame closes 42% of the gap to T1 single (+0.033 absolute IoBB). Precision=0.055 confirms genuine coverage gain.
 
@@ -252,6 +268,9 @@ lidar_gap_mapping/
 ├── run_kitti_odometry_benchmark.py # Phase 10b: KITTI Odometry benchmark (single+multi-frame, NMSE only)
 ├── run_full_version.sh             # One-shot: runs every benchmark above in order, for a full report snapshot
 ├── check_iobb_overlay.py           # Phase 7: IoBB sanity visualizer
+├── plot_convergence.py             # Figure 3: EM convergence trace (β=0 vs β=1)
+├── run_hyperparam_sensitivity.py   # γ / free-row-weight sensitivity sweep (independent validation)
+├── requirements.txt                 # numpy, scipy, matplotlib
 │
 ├── src/
 │   ├── data_loader.py          # NuScenesLoader/KittiLoader: dataset loading and LiDAR reading
@@ -287,18 +306,18 @@ lidar_gap_mapping/
 ```bash
 ./run_full_version.sh
 ```
-*Takes around 46 minutes to execute
-
 Runs T1/T2 on all nuScenes scenes, the multi-frame sweep, both KITTI benchmarks, both acceleration
-ablations, report figures, and the cross-dataset comparison chart, in order. Appends to
-`results/results_log.md`, writes figures to `output/`. Takes ~45–90 minutes (PC-SBL's EM loop runs
-up to `max_iter` sparse solves per scan across dozens of scenes/frames — this isn't a hang).
+ablations, report figures, the cross-dataset comparison chart, the EM convergence trace and IoBB
+overlay figures, and a PC-SBL hyperparameter sensitivity sweep, in order (11 stages total). Appends
+to `results/results_log.md`, writes figures to `output/`. Takes ~45–90 minutes (PC-SBL's EM loop
+runs up to `max_iter` sparse solves per scan across dozens of scenes/frames — this isn't a hang).
 
 **Requirements:** Python 3.11+
 
 ```bash
-pip install numpy scipy matplotlib nuscenes-devkit
+pip install -r requirements.txt
 ```
+(numpy, scipy, matplotlib — nuScenes/KITTI loading reads the raw JSON/binary files directly, no `nuscenes-devkit` dependency needed)
 
 **Tier 1 single scan with evaluation:**
 ```bash
@@ -401,7 +420,7 @@ Results are appended to `results/results_log.md` after every run.
 | 8 — Multi-frame (Phase 9) | Jun 15 | Done | T2 IoBB 0.023→0.056 (+141%) |
 | 9 — KITTI generalization (Phase 10) | Jun 15 | Done | 50-frame KITTI 3D Object benchmark, unmodified pipeline |
 | 9b — KITTI Odometry generalization (Phase 10b) | Jul 04 | Done | 50-frame KITTI Odometry benchmark, single+multi-frame NMSE |
-| 10 — Report + Final | Jun 22–Jul 13 | Active | Written report + slides |
+| 10 — Report + Final | Jun 22–Aug 15 | Done | Report finalized for Aug 15 submission; presentation rescheduled to Oct 1 (SoSe 2026 second exam term) |
 
 ---
 
